@@ -1,34 +1,64 @@
 import XCTest
 
 final class SplitterUITests: XCTestCase {
-
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    /// Creates a bill from scratch the way a person would and checks the split.
+    func testSplittingANewBill() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-demo"]
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        app.navigationBars.buttons["New Bill"].tap()
+        let title = app.textFields["What's this bill for?"]
+        title.tap()
+        title.typeText("Tacos")
+
+        let addPerson = app.textFields["Add a person"]
+        addPerson.tap()
+        addPerson.typeText("Dani\n")
+        addPerson.typeText("Sam\n")
+
+        app.buttons["Add Item"].tap()
+        let itemName = app.textFields["Item name"]
+        XCTAssertTrue(itemName.waitForExistence(timeout: 3))
+        itemName.typeText("Taco Platter")
+        app.textFields["Price"].tap()
+        app.textFields["Price"].typeText("30")
+        app.buttons["Save"].tap()
+
+        app.buttons["0%"].tap()
+        app.swipeUp()
+
+        XCTAssertTrue(app.staticTexts["$30.00"].exists)
+        XCTAssertTrue(app.staticTexts["$15.00"].waitForExistence(timeout: 2), "Each person should owe half")
+        snapshot(app, "4-new-bill")
     }
 
-    func testLaunchPerformance() throws {
-        if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
-            // This measures how long it takes to launch your application.
-            measure(metrics: [XCTApplicationLaunchMetric()]) {
-                XCUIApplication().launch()
-            }
+    func testDemoBillBreakdown() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-openBill"]
+        app.launch()
+        app.swipeUp()
+        snapshot(app, "5-totals")
+        app.swipeUp()
+        let alice = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Alice'")).firstMatch
+        XCTAssertTrue(alice.label.contains("$45.36"), "Alice owes her food + proportional tax and tip")
+        alice.tap()
+        XCTAssertTrue(app.staticTexts["Margherita Pizza (÷2)"].waitForExistence(timeout: 2))
+        snapshot(app, "6-who-owes")
+    }
+
+    private func snapshot(_ app: XCUIApplication, _ name: String) {
+        let shot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: shot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let dir = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
+            try? shot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
         }
     }
 }
