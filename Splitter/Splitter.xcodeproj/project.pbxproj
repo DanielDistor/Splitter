@@ -19,16 +19,11 @@
 		2524E1492BDDCB3A0078BBB5 /* FirebaseAuthUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2524E1482BDDCB3A0078BBB5 /* FirebaseAuthUI */; };
 		2524E14B2BDDCB3A0078BBB5 /* FirebaseEmailAuthUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2524E14A2BDDCB3A0078BBB5 /* FirebaseEmailAuthUI */; };
 		2524E14D2BDDCCE50078BBB5 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E14C2BDDCCE50078BBB5 /* AppDelegate.swift */; };
-		2524E14F2BDDCD080078BBB5 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E14E2BDDCD080078BBB5 /* MainTabView.swift */; };
 		2524E1572BDDCF240078BBB5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2524E1562BDDCF240078BBB5 /* GoogleService-Info.plist */; };
 		2524E15D2BDDE1CC0078BBB5 /* FirebaseFirestoreUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2524E15C2BDDE1CC0078BBB5 /* FirebaseFirestoreUI */; };
 		2524E15F2BDE09290078BBB5 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E15E2BDE09290078BBB5 /* WelcomeView.swift */; };
 		2524E1632BDE123D0078BBB5 /* FirebaseAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1622BDE123D0078BBB5 /* FirebaseAuthView.swift */; };
 		2524E1652BDE15790078BBB5 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1642BDE15790078BBB5 /* SignInView.swift */; };
-		2524E16B2BDF0DF20078BBB5 /* MealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E16A2BDF0DF20078BBB5 /* MealView.swift */; };
-		2524E16D2BDF0E7A0078BBB5 /* MealService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E16C2BDF0E7A0078BBB5 /* MealService.swift */; };
-		2524E16F2BDF10340078BBB5 /* MealDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E16E2BDF10340078BBB5 /* MealDetailView.swift */; };
-		2524E1712BDF106E0078BBB5 /* Meal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1702BDF106E0078BBB5 /* Meal.swift */; };
 		2524E1732BE046B90078BBB5 /* SplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1722BE046B90078BBB5 /* SplitView.swift */; };
 		2524E1752BE046D30078BBB5 /* NewEventView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1742BE046D30078BBB5 /* NewEventView.swift */; };
 		2524E1772BE04C7B0078BBB5 /* FirestoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2524E1762BE04C7B0078BBB5 /* FirestoreManager.swift */; };
@@ -65,15 +60,10 @@
 		2524E1312BDDCA3B0078BBB5 /* SplitterUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitterUITests.swift; sourceTree = "<group>"; };
 		2524E1332BDDCA3B0078BBB5 /* SplitterUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitterUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		2524E14C2BDDCCE50078BBB5 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		2524E14E2BDDCD080078BBB5 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		2524E1562BDDCF240078BBB5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		2524E15E2BDE09290078BBB5 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		2524E1622BDE123D0078BBB5 /* FirebaseAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthView.swift; sourceTree = "<group>"; };
 		2524E1642BDE15790078BBB5 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
-		2524E16A2BDF0DF20078BBB5 /* MealView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealView.swift; sourceTree = "<group>"; };
-		2524E16C2BDF0E7A0078BBB5 /* MealService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealService.swift; sourceTree = "<group>"; };
-		2524E16E2BDF10340078BBB5 /* MealDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealDetailView.swift; sourceTree = "<group>"; };
-		2524E1702BDF106E0078BBB5 /* Meal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Meal.swift; sourceTree = "<group>"; };
 		2524E1722BE046B90078BBB5 /* SplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitView.swift; sourceTree = "<group>"; };
 		2524E1742BE046D30078BBB5 /* NewEventView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewEventView.swift; sourceTree = "<group>"; };
 		2524E1762BE04C7B0078BBB5 /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
@@ -188,9 +178,6 @@
 				2524E1722BE046B90078BBB5 /* SplitView.swift */,
 				2524E1742BE046D30078BBB5 /* NewEventView.swift */,
 				2524E17A2BE0822D0078BBB5 /* EventDetailView.swift */,
-				2524E16A2BDF0DF20078BBB5 /* MealView.swift */,
-				2524E16E2BDF10340078BBB5 /* MealDetailView.swift */,
-				2524E14E2BDDCD080078BBB5 /* MainTabView.swift */,
 				2524E1182BDDCA390078BBB5 /* ContentView.swift */,
 			);
 			path = Views;
@@ -200,7 +187,6 @@
 			isa = PBXGroup;
 			children = (
 				2524E1782BE04E8C0078BBB5 /* event.swift */,
-				2524E1702BDF106E0078BBB5 /* Meal.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -209,7 +195,6 @@
 			isa = PBXGroup;
 			children = (
 				2524E1762BE04C7B0078BBB5 /* FirestoreManager.swift */,
-				2524E16C2BDF0E7A0078BBB5 /* MealService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -361,15 +346,10 @@
 				2524E1772BE04C7B0078BBB5 /* FirestoreManager.swift in Sources */,
 				2524E1652BDE15790078BBB5 /* SignInView.swift in Sources */,
 				2524E1192BDDCA390078BBB5 /* ContentView.swift in Sources */,
-				2524E16B2BDF0DF20078BBB5 /* MealView.swift in Sources */,
-				2524E1712BDF106E0078BBB5 /* Meal.swift in Sources */,
 				2524E1732BE046B90078BBB5 /* SplitView.swift in Sources */,
 				2524E1172BDDCA390078BBB5 /* SplitterApp.swift in Sources */,
 				2524E1752BE046D30078BBB5 /* NewEventView.swift in Sources */,
-				2524E16D2BDF0E7A0078BBB5 /* MealService.swift in Sources */,
 				2524E1632BDE123D0078BBB5 /* FirebaseAuthView.swift in Sources */,
-				2524E14F2BDDCD080078BBB5 /* MainTabView.swift in Sources */,
-				2524E16F2BDF10340078BBB5 /* MealDetailView.swift in Sources */,
 				2524E15F2BDE09290078BBB5 /* WelcomeView.swift in Sources */,
 				2524E1792BE04E8C0078BBB5 /* event.swift in Sources */,
 			);

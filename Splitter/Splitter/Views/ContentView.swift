@@ -5,7 +5,7 @@ struct ContentView: View {
 
     var body: some View {
         if isSignedIn {
-            MainTabView()
+            SplitView()
         } else {
             WelcomeView(isSignedIn: $isSignedIn)
         }
