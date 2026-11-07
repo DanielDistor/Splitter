@@ -34,8 +34,17 @@ final class BillStore {
         return bill
     }
 
+    /// The bills removed by the last delete, so the list can offer Undo.
+    var recentlyDeleted: UndoAction?
+
     func delete(ids: [UUID]) {
+        let removed = bills.filter { ids.contains($0.id) }
+        guard !removed.isEmpty else { return }
         bills.removeAll { ids.contains($0.id) }
+        let name = removed.count == 1 ? (removed[0].title.isEmpty ? "Untitled Bill" : removed[0].title) : "\(removed.count) bills"
+        recentlyDeleted = UndoAction(message: "Deleted \(name)") { [weak self] in
+            self?.bills.append(contentsOf: removed)
+        }
     }
 
     private func save() {

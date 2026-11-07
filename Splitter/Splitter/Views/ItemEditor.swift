@@ -4,14 +4,18 @@ struct ItemEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var item: BillItem
     @FocusState private var nameFocused: Bool
+    @State private var showSplitChoices = false
     let people: [Person]
     let onDelete: (() -> Void)?
+    let onSplit: ((BillItem, Int) -> Void)?
     let onSave: (BillItem) -> Void
 
-    init(item: BillItem, people: [Person], onDelete: (() -> Void)? = nil, onSave: @escaping (BillItem) -> Void) {
+    init(item: BillItem, people: [Person], onDelete: (() -> Void)? = nil, onSplit: ((BillItem, Int) -> Void)? = nil,
+         onSave: @escaping (BillItem) -> Void) {
         _item = State(initialValue: item)
         self.people = people
         self.onDelete = onDelete
+        self.onSplit = onSplit
         self.onSave = onSave
     }
 
@@ -65,6 +69,26 @@ struct ItemEditor: View {
                     Text(splitDescription)
                 }
 
+                if let onSplit, item.priceCents > 1 {
+                    Section {
+                        Button {
+                            showSplitChoices = true
+                        } label: {
+                            Label("Split into Separate Items", systemImage: "square.split.2x1")
+                        }
+                        .confirmationDialog("Split \(item.name.isEmpty ? "this item" : item.name) into…", isPresented: $showSplitChoices, titleVisibility: .visible) {
+                            ForEach(2...8, id: \.self) { count in
+                                Button("\(count) items, \(Money.format(item.priceCents / count)) each") {
+                                    onSplit(item, count)
+                                    dismiss()
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text("For things like 3 tacos on one line, so each can go to a different person.")
+                    }
+                }
+
                 if let onDelete {
                     Section {
                         Button("Delete Item", role: .destructive) {
@@ -92,7 +116,7 @@ struct ItemEditor: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(onDelete == nil ? [.medium, .large] : [.large])
         .presentationCornerRadius(28)
     }
 

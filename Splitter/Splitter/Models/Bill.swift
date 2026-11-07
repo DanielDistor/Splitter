@@ -13,6 +13,16 @@ struct BillItem: Identifiable, Codable, Hashable {
     var sharedBy: Set<UUID> = []
 }
 
+extension BillItem {
+    /// Splits one line into `count` separate items (e.g. 3 tacos) whose prices add up exactly.
+    func split(into count: Int) -> [BillItem] {
+        guard count > 1 else { return [self] }
+        return Split.allocate(priceCents, weights: Array(repeating: 1, count: count)).map {
+            BillItem(name: name, priceCents: $0, sharedBy: sharedBy)
+        }
+    }
+}
+
 enum Tip: Codable, Hashable {
     case percent(Double)
     case amount(cents: Int)

@@ -17,8 +17,9 @@ final class ReceiptParserTests: XCTestCase {
             "Change 0.00",
         ])
 
-        XCTAssertEqual(receipt.items.map(\.name), ["Margherita Pizza", "Ribeye Steak", "2 Iced Tea"])
+        XCTAssertEqual(receipt.items.map(\.name), ["Margherita Pizza", "Ribeye Steak", "Iced Tea"])
         XCTAssertEqual(receipt.items.map(\.priceCents), [1_800, 3_400, 750])
+        XCTAssertEqual(receipt.items.map(\.quantity), [1, 1, 2])
         XCTAssertEqual(receipt.subtotalCents, 5_950)
         XCTAssertEqual(receipt.taxCents, 521)
         XCTAssertEqual(receipt.totalCents, 6_471)
@@ -54,6 +55,21 @@ final class ReceiptParserTests: XCTestCase {
         let receipt = ReceiptParser.parse(lines: ["A 5.00", "B 5.00", "Subtotal 12.00"])
         XCTAssertEqual(receipt.itemsSumCents, 1_000)
         XCTAssertFalse(receipt.itemsMatchSubtotal)
+    }
+}
+
+final class QuantityTests: XCTestCase {
+    func testReadsQuantityWrittenDifferentWays() {
+        let receipt = ReceiptParser.parse(lines: ["2 Iced Tea 7.50", "3x Tacos 12.00", "Beer x4 24.00", "Pho 15.00", "7UP 3.00"])
+        XCTAssertEqual(receipt.items.map(\.name), ["Iced Tea", "Tacos", "Beer", "Pho", "7UP"])
+        XCTAssertEqual(receipt.items.map(\.quantity), [2, 3, 4, 1, 1])
+    }
+
+    func testSplittingAnItemKeepsTheTotalExact() {
+        let pieces = BillItem(name: "Tacos", priceCents: 1_000).split(into: 3)
+        XCTAssertEqual(pieces.map(\.priceCents), [334, 333, 333])
+        XCTAssertEqual(pieces.map(\.name), ["Tacos", "Tacos", "Tacos"])
+        XCTAssertEqual(Set(pieces.map(\.id)).count, 3)
     }
 }
 

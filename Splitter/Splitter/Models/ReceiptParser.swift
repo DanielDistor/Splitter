@@ -11,6 +11,8 @@ struct ScannedItem: Identifiable, Hashable {
     var id = UUID()
     var name: String
     var priceCents: Int
+    /// "2 Iced Tea" → 2. Added to the bill as separate items so each can go to a different person.
+    var quantity = 1
     var include = true
 }
 
@@ -59,10 +61,25 @@ enum ReceiptParser {
                 receipt.totalCents = cents
                 break // Anything after the total is payment details.
             } else if words.isDisjoint(with: paymentWords) {
-                receipt.items.append(ScannedItem(name: name, priceCents: cents))
+                let (quantity, itemName) = splitQuantity(name)
+                receipt.items.append(ScannedItem(name: itemName, priceCents: cents, quantity: quantity))
             }
         }
         return receipt
+    }
+
+    private static let leadingQuantity = /^(\d{1,2})\s*[xX]?\s+(.*[A-Za-z].*)$/
+    private static let trailingQuantity = /^(.*[A-Za-z].*?)\s+[xX]\s?(\d{1,2})$/
+
+    /// "2 Iced Tea", "3x Tacos", "Beer x4" → (quantity, name). Leaves names like "7UP" alone.
+    static func splitQuantity(_ name: String) -> (Int, String) {
+        if let match = name.wholeMatch(of: leadingQuantity), let count = Int(match.1), (2...20).contains(count) {
+            return (count, String(match.2))
+        }
+        if let match = name.wholeMatch(of: trailingQuantity), let count = Int(match.2), (2...20).contains(count) {
+            return (count, String(match.1))
+        }
+        return (1, name)
     }
 
     /// Groups text boxes into printed rows (top to bottom), joining each row left to right.

@@ -32,6 +32,7 @@ private struct BillEditor: View {
     @State private var showAddPerson = false
     @State private var addPersonText = ""
     @State private var confirmDeleteBill = false
+    @State private var undo: UndoAction?
     @FocusState private var addPersonFocused: Bool
 
     @State private var showCamera = false
@@ -82,7 +83,7 @@ private struct BillEditor: View {
             Text("This can't be undone.")
         }
         .sheet(item: $editingPerson) { ref in
-            PersonEditor(bill: $bill, personID: ref.id)
+            PersonEditor(bill: $bill, personID: ref.id) { removePerson(ref.id) }
         }
         .alert("Add Person", isPresented: $showAddPerson) {
             TextField("Name", text: $addPersonText)
@@ -96,7 +97,9 @@ private struct BillEditor: View {
         }
         .sheet(item: $editingItem) { item in
             let isExisting = bill.items.contains { $0.id == item.id }
-            ItemEditor(item: item, people: bill.people, onDelete: isExisting ? { bill.items.removeAll { $0.id == item.id } } : nil) { saved in
+            ItemEditor(item: item, people: bill.people,
+                       onDelete: isExisting ? { deleteItem(item) } : nil,
+                       onSplit: isExisting ? splitItem : nil) { saved in
                 if let index = bill.items.firstIndex(where: { $0.id == saved.id }) {
                     bill.items[index] = saved
                 } else {
@@ -143,6 +146,13 @@ private struct BillEditor: View {
         } message: {
             Text(scanError ?? "")
         }
+        .safeAreaInset(edge: .bottom) {
+            if let undo {
+                UndoToast(action: undo) { withAnimation { self.undo = nil } }
+                    .padding(.bottom, 8)
+            }
+        }
+        .animation(.snappy, value: undo?.id)
         .task {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-scanDemoReceipt"), scanned == nil {
@@ -258,7 +268,7 @@ private struct BillEditor: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button("Delete Item", systemImage: "trash", role: .destructive) {
-                            withAnimation { bill.items.removeAll { $0.id == item.id } }
+                            deleteItem(item)
                         }
                     }
                 }
@@ -432,8 +442,37 @@ private struct BillEditor: View {
         }
     }
 
+    private func undoable(_ message: String, _ change: () -> Void) {
+        let before = bill
+        let binding = $bill
+        withAnimation(.snappy) { change() }
+        undo = UndoAction(message: message) {
+            withAnimation(.snappy) { binding.wrappedValue = before }
+        }
+    }
+
+    private func deleteItem(_ item: BillItem) {
+        undoable("Deleted \(item.name.isEmpty ? "item" : item.name)") {
+            bill.items.removeAll { $0.id == item.id }
+        }
+    }
+
+    private func removePerson(_ id: UUID) {
+        let name = bill.people.first { $0.id == id }?.name ?? "person"
+        undoable("Removed \(name.isEmpty ? "person" : name)") {
+            bill.removePerson(id)
+        }
+    }
+
+    private func splitItem(_ item: BillItem, into count: Int) {
+        guard let index = bill.items.firstIndex(where: { $0.id == item.id }) else { return }
+        undoable("Split \(item.name) into \(count)") {
+            bill.items.replaceSubrange(index...index, with: item.split(into: count))
+        }
+    }
+
     private func addScanned(_ items: [ScannedItem], taxCents: Int?, tipCents: Int?) {
-        bill.items += items.map { BillItem(name: $0.name, priceCents: $0.priceCents) }
+        bill.items += items.flatMap { BillItem(name: $0.name, priceCents: $0.priceCents).split(into: $0.quantity) }
         if let taxCents { bill.taxCents = taxCents }
         if let tipCents { bill.tip = .amount(cents: tipCents) }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 struct BillListView: View {
     @Environment(BillStore.self) private var store
     @State private var path: [UUID] = []
+    @State private var showWelcome = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -36,12 +37,23 @@ struct BillListView: View {
             }
             .background(Theme.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .overlay(alignment: .bottom) { newBillButton }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 12) {
+                    if let undo = store.recentlyDeleted {
+                        UndoToast(action: undo) { withAnimation { store.recentlyDeleted = nil } }
+                    }
+                    newBillButton
+                }
+                .animation(.snappy, value: store.recentlyDeleted?.id)
+            }
             .navigationDestination(for: UUID.self) { id in
                 BillDetailView(billID: id)
             }
         }
         .onAppear(perform: openRequestedBill)
+        .fullScreenCover(isPresented: $showWelcome) {
+            WelcomeView { showWelcome = false }
+        }
     }
 
     // MARK: Pieces
@@ -60,6 +72,14 @@ struct BillListView: View {
                 Text("Splitter")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                 Spacer()
+                Button {
+                    showWelcome = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .accessibilityLabel("About Splitter")
             }
 
             VStack(alignment: .leading, spacing: 4) {

@@ -5,6 +5,7 @@ struct PersonEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var bill: Bill
     let personID: UUID
+    let onRemove: () -> Void
     @State private var confirmRemove = false
 
     private var index: Int? { bill.people.firstIndex { $0.id == personID } }
@@ -42,7 +43,7 @@ struct PersonEditor: View {
         .confirmationDialog("Remove \(name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 dismiss()
-                bill.removePerson(personID)
+                onRemove()
             }
         } message: {
             Text("Their share gets split among everyone else who had the same items.")

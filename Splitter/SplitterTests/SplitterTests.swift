@@ -204,3 +204,20 @@ final class BillStoreSafetyTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: dir.appending(path: backups[0]), encoding: .utf8), "not json")
     }
 }
+
+final class UndoDeleteTests: XCTestCase {
+    func testDeletedBillCanBeBroughtBack() {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = BillStore(fileURL: url)
+        let bill = Bill(title: "Tacos")
+        store.bills = [bill]
+
+        store.delete(ids: [bill.id])
+        XCTAssertTrue(store.bills.isEmpty)
+        XCTAssertEqual(store.recentlyDeleted?.message, "Deleted Tacos")
+
+        store.recentlyDeleted?.undo()
+        XCTAssertEqual(store.bills, [bill])
+    }
+}

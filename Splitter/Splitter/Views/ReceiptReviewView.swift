@@ -28,7 +28,14 @@ struct ReceiptReviewView: View {
                     Section {
                         ForEach($receipt.items) { $item in
                             Toggle(isOn: $item.include) {
-                                LabeledContent(item.name, value: Money.format(item.priceCents))
+                                LabeledContent {
+                                    Text(Money.format(item.priceCents))
+                                } label: {
+                                    Text(item.name)
+                                    if item.quantity > 1 {
+                                        Text("×\(item.quantity) — added as \(item.quantity) separate items")
+                                    }
+                                }
                             }
                             .toggleStyle(CheckboxStyle())
                         }

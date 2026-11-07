@@ -91,11 +91,37 @@ final class SplitterUITests: XCTestCase {
 
         // Give Dana a slice of the pizza too.
         dana.tap()
-        app.buttons["Edit what Dana had"].tap()
+        let edit = app.buttons["Edit what Dana had"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 2))
+        for _ in 0..<3 where !edit.isHittable || edit.frame.maxY > app.frame.maxY - 60 { app.swipeUp() }
+        edit.tap()
         app.buttons["Margherita Pizza"].tap()
         snapshot(app, "10-person-editor")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Dana, $21.38'")).firstMatch.waitForExistence(timeout: 3))
+    }
+
+    func testDeleteThenUndoAndSplitAnItem() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
+        app.launch()
+
+        let ribeye = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Ribeye'")).firstMatch
+        ribeye.tap()
+        app.buttons["Delete Item"].tap()
+        XCTAssertFalse(ribeye.waitForExistence(timeout: 1))
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 2))
+        snapshot(app, "11-undo")
+        undo.tap()
+        XCTAssertTrue(ribeye.waitForExistence(timeout: 2), "Undo brings the item back")
+
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Caesar Salad'")).firstMatch.tap()
+        app.buttons["Split into Separate Items"].tap()
+        app.buttons["2 items, $6.00 each"].tap()
+        let salads = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Caesar Salad'"))
+        XCTAssertTrue(salads.element(boundBy: 1).waitForExistence(timeout: 2))
+        XCTAssertEqual(salads.count, 2)
     }
 
     private func snapshot(_ app: XCUIApplication, _ name: String) {

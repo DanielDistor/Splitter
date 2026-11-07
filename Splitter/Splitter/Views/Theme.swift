@@ -36,8 +36,10 @@ extension Color {
 }
 
 extension Font {
+    /// Rounded numbers that grow with the iPhone's text size setting (capped so totals still fit).
     static func money(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        let scaled = UIFontMetrics.default.scaledValue(for: size)
+        return .system(size: min(scaled, size * 1.6), weight: weight, design: .rounded)
     }
 }
 
@@ -139,5 +141,43 @@ struct PillButtonStyle: ButtonStyle {
             .background(isSelected ? Theme.brandFill : Theme.brand.opacity(0.1), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// Something that was just deleted and can be put back.
+struct UndoAction: Identifiable {
+    let id = UUID()
+    let message: String
+    let undo: () -> Void
+}
+
+/// "Deleted Dana · Undo" bar that disappears after a few seconds.
+struct UndoToast: View {
+    let action: UndoAction
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(action.message)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button("Undo") {
+                action.undo()
+                dismiss()
+            }
+            .fontWeight(.semibold)
+            .foregroundStyle(Color(light: 0x9CCBEA, dark: 0x9CCBEA))
+        }
+        .font(.subheadline)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(Color(light: 0x1F2A33, dark: 0x2C3A47), in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .task(id: action.id) {
+            try? await Task.sleep(for: .seconds(5))
+            dismiss()
+        }
     }
 }
