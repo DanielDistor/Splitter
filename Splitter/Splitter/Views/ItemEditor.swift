@@ -5,11 +5,13 @@ struct ItemEditor: View {
     @State private var item: BillItem
     @FocusState private var nameFocused: Bool
     let people: [Person]
+    let onDelete: (() -> Void)?
     let onSave: (BillItem) -> Void
 
-    init(item: BillItem, people: [Person], onSave: @escaping (BillItem) -> Void) {
+    init(item: BillItem, people: [Person], onDelete: (() -> Void)? = nil, onSave: @escaping (BillItem) -> Void) {
         _item = State(initialValue: item)
         self.people = people
+        self.onDelete = onDelete
         self.onSave = onSave
     }
 
@@ -30,8 +32,23 @@ struct ItemEditor: View {
                         Text("Add people to the bill to choose who shared this.")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(people) { person in
-                            Toggle(person.name.isEmpty ? "Unnamed" : person.name, isOn: isSharing(person))
+                        ForEach(Array(people.enumerated()), id: \.element.id) { index, person in
+                            let isOn = item.sharedBy.contains(person.id)
+                            Button {
+                                withAnimation(.snappy(duration: 0.2)) { isSharing(person).wrappedValue.toggle() }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Avatar(name: person.name, color: Theme.color(for: index), size: 34)
+                                    Text(person.name.isEmpty ? "Unnamed" : person.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3)
+                                        .foregroundStyle(isOn ? Theme.color(for: index) : Color.secondary.opacity(0.5))
+                                }
+                            }
+                            .accessibilityLabel(person.name)
+                            .accessibilityAddTraits(isOn ? .isSelected : [])
                         }
                     }
                 } header: {
@@ -47,7 +64,19 @@ struct ItemEditor: View {
                 } footer: {
                     Text(splitDescription)
                 }
+
+                if let onDelete {
+                    Section {
+                        Button("Delete Item", role: .destructive) {
+                            onDelete()
+                            dismiss()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
             .navigationTitle(item.name.isEmpty ? "Item" : item.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -64,6 +93,7 @@ struct ItemEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationCornerRadius(28)
     }
 
     private var splitDescription: String {

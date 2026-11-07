@@ -19,6 +19,9 @@ private struct BillEditor: View {
     @Binding var bill: Bill
     @State private var newPersonName = ""
     @State private var editingItem: BillItem?
+    @State private var expandedPeople: Set<UUID> = []
+    @State private var renamingPerson: Person?
+    @State private var renameText = ""
     @FocusState private var addPersonFocused: Bool
 
     @State private var showCamera = false
@@ -29,27 +32,29 @@ private struct BillEditor: View {
     @State private var scanError: String?
 
     private static let tipPresets = [0, 15, 18, 20]
-    private static let customTip = -1
 
     var body: some View {
         let summary = Split.summarize(bill)
-        Form {
-            Section {
-                TextField("What's this bill for?", text: $bill.title)
-                    .font(.headline)
-                DatePicker("Date", selection: $bill.date, displayedComponents: .date)
+        ScrollView {
+            VStack(spacing: 18) {
+                hero(summary)
+                peopleCard
+                itemsCard
+                taxAndTipCard(summary)
+                if !summary.shares.isEmpty {
+                    whoOwesCard(summary)
+                }
             }
-
-            peopleSection
-            itemsSection
-            taxAndTipSection(summary)
-            totalsSection(summary)
-            if !summary.shares.isEmpty {
-                whoOwesSection(summary)
-            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 40)
+            .animation(.snappy, value: summary)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle(bill.title.isEmpty ? "New Bill" : bill.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.background, for: .navigationBar)
         .toolbar {
             ShareLink(item: shareText(summary)) {
                 Label("Share", systemImage: "square.and.arrow.up")
@@ -57,7 +62,8 @@ private struct BillEditor: View {
             .disabled(summary.shares.isEmpty)
         }
         .sheet(item: $editingItem) { item in
-            ItemEditor(item: item, people: bill.people) { saved in
+            let isExisting = bill.items.contains { $0.id == item.id }
+            ItemEditor(item: item, people: bill.people, onDelete: isExisting ? { bill.items.removeAll { $0.id == item.id } } : nil) { saved in
                 if let index = bill.items.firstIndex(where: { $0.id == saved.id }) {
                     bill.items[index] = saved
                 } else {
@@ -91,15 +97,27 @@ private struct BillEditor: View {
         }
         .overlay {
             if isScanning {
-                ProgressView("Reading receipt…")
-                    .padding(24)
-                    .background(.regularMaterial, in: .rect(cornerRadius: 16))
+                VStack(spacing: 14) {
+                    ProgressView().controlSize(.large).tint(Theme.brand)
+                    Text("Reading receipt…").font(.headline)
+                }
+                .padding(28)
+                .background(.regularMaterial, in: .rect(cornerRadius: 22))
             }
         }
         .alert("Couldn't Scan", isPresented: Binding { scanError != nil } set: { if !$0 { scanError = nil } }) {
             Button("OK") {}
         } message: {
             Text(scanError ?? "")
+        }
+        .alert("Rename", isPresented: Binding { renamingPerson != nil } set: { if !$0 { renamingPerson = nil } }) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                if let id = renamingPerson?.id, let index = bill.people.firstIndex(where: { $0.id == id }) {
+                    bill.people[index].name = renameText.trimmingCharacters(in: .whitespaces)
+                }
+            }
         }
         .task {
             #if DEBUG
@@ -110,143 +128,247 @@ private struct BillEditor: View {
         }
     }
 
-    // MARK: Sections
+    // MARK: Hero
 
-    private var peopleSection: some View {
-        Section {
-            ForEach($bill.people) { $person in
-                TextField("Name", text: $person.name)
+    private func hero(_ summary: BillSummary) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            TextField("What's this bill for?", text: $bill.title,
+                      prompt: Text("What's this bill for?").foregroundStyle(.white.opacity(0.55)))
+                .font(.title2.bold())
+
+            DatePicker("Date", selection: $bill.date, displayedComponents: .date)
+                .labelsHidden()
+                .colorScheme(.dark)
+                .tint(.white)
+
+            Rectangle().fill(.white.opacity(0.2)).frame(height: 1)
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TOTAL")
+                        .font(.caption.weight(.semibold))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(Money.format(summary.totalCents))
+                        .font(.money(42))
+                        .contentTransition(.numericText())
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if !bill.people.isEmpty {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        AvatarStack(people: bill.people, size: 30, outline: Theme.brand)
+                        Text(bill.people.count == 1 ? "1 person" : "\(bill.people.count) people")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
             }
-            .onDelete { bill.removePeople(at: $0) }
+        }
+        .foregroundStyle(.white)
+        .padding(22)
+        .background(Theme.heroGradient, in: .rect(cornerRadius: 28))
+        .shadow(color: Theme.brand.opacity(0.35), radius: 18, y: 10)
+    }
 
-            HStack {
+    // MARK: People
+
+    private var peopleCard: some View {
+        CardSection("People", systemImage: "person.2.fill") {
+            if !bill.people.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(bill.people.enumerated()), id: \.element.id) { index, person in
+                            Menu {
+                                Button("Rename", systemImage: "pencil") {
+                                    renameText = person.name
+                                    renamingPerson = person
+                                }
+                                Button("Remove", systemImage: "person.fill.xmark", role: .destructive) {
+                                    withAnimation { bill.removePeople(at: [index]) }
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Avatar(name: person.name, color: Theme.color(for: index), size: 30)
+                                    Text(person.name.isEmpty ? "Unnamed" : person.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                }
+                                .padding(4)
+                                .padding(.trailing, 10)
+                                .background(Theme.color(for: index).opacity(0.12), in: Capsule())
+                            }
+                        }
+                    }
+                }
+                .scrollClipDisabled()
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "person.badge.plus")
+                    .foregroundStyle(Theme.brand)
                 TextField("Add a person", text: $newPersonName)
                     .focused($addPersonFocused)
                     .submitLabel(.next)
                     .onSubmit(addPerson)
-                Button("Add", systemImage: "plus.circle.fill", action: addPerson)
-                    .labelStyle(.iconOnly)
-                    .disabled(newPersonName.trimmingCharacters(in: .whitespaces).isEmpty)
+                if !newPersonName.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button("Add", action: addPerson)
+                        .buttonStyle(PillButtonStyle(isSelected: true))
+                        .controlSize(.small)
+                }
             }
-        } header: {
-            Text("People")
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.field, in: .rect(cornerRadius: 14))
         }
     }
 
-    private var itemsSection: some View {
-        Section {
-            ForEach(bill.items) { item in
+    // MARK: Items
+
+    private var itemsCard: some View {
+        CardSection("Items", systemImage: "fork.knife",
+                    footer: bill.items.isEmpty ? nil : "Tap an item to choose who had it.") {
+            VStack(spacing: 0) {
+                ForEach(Array(bill.items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider() }
+                    Button {
+                        editingItem = item
+                    } label: {
+                        ItemRow(item: item, people: bill.people)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Delete Item", systemImage: "trash", role: .destructive) {
+                            withAnimation { bill.items.removeAll { $0.id == item.id } }
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
                 Button {
-                    editingItem = item
+                    editingItem = BillItem(name: "", priceCents: 0)
                 } label: {
-                    ItemRow(item: item, people: bill.people)
+                    Label("Add Item", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
                 }
-                .tint(.primary)
-            }
-            .onDelete { bill.items.remove(atOffsets: $0) }
+                .buttonStyle(PillButtonStyle(isSelected: true))
 
-            Button("Add Item", systemImage: "plus") {
-                editingItem = BillItem(name: "", priceCents: 0)
-            }
-            Menu {
-                if DocumentCamera.isAvailable {
-                    Button("Take Photo", systemImage: "camera") { showCamera = true }
+                Menu {
+                    if DocumentCamera.isAvailable {
+                        Button("Take Photo", systemImage: "camera") { showCamera = true }
+                    }
+                    Button("Choose from Photos", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+                } label: {
+                    Label("Scan Receipt", systemImage: "doc.text.viewfinder")
+                        .frame(maxWidth: .infinity)
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.vertical, 10)
+                        .foregroundStyle(Theme.brand)
+                        .background(Theme.brand.opacity(0.1), in: Capsule())
                 }
-                Button("Choose from Photos", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
-            } label: {
-                Label("Scan Receipt", systemImage: "doc.text.viewfinder")
-            }
-            .disabled(isScanning)
-        } header: {
-            Text("Items")
-        } footer: {
-            if !bill.items.isEmpty {
-                Text("Tap an item to change who shared it.")
+                .disabled(isScanning)
             }
         }
     }
 
-    private func taxAndTipSection(_ summary: BillSummary) -> some View {
-        Section("Tax & Tip") {
-            LabeledContent("Tax") {
+    // MARK: Tax & tip
+
+    private func taxAndTipCard(_ summary: BillSummary) -> some View {
+        CardSection("Tax & Tip", systemImage: "percent") {
+            HStack {
+                Text("Tax")
+                Spacer()
                 CurrencyField(cents: $bill.taxCents)
             }
-            Picker("Tip", selection: tipChoice(summary)) {
-                ForEach(Self.tipPresets, id: \.self) { Text("\($0)%").tag($0) }
-                Text("Custom").tag(Self.customTip)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Theme.field, in: .rect(cornerRadius: 14))
+
+            HStack(spacing: 6) {
+                ForEach(Self.tipPresets, id: \.self) { percent in
+                    Button("\(percent)%") {
+                        bill.tip = .percent(Double(percent))
+                    }
+                    .buttonStyle(PillButtonStyle(isSelected: selectedTipPreset == percent))
+                }
+                Button("Custom") {
+                    if selectedTipPreset != nil { bill.tip = .amount(cents: summary.tipCents) }
+                }
+                .buttonStyle(PillButtonStyle(isSelected: selectedTipPreset == nil))
             }
-            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity)
 
             if case .amount = bill.tip {
-                LabeledContent("Tip Amount") {
+                HStack {
+                    Text("Tip amount")
+                    Spacer()
                     CurrencyField(cents: customTipCents)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Theme.field, in: .rect(cornerRadius: 14))
             }
+
+            VStack(spacing: 10) {
+                summaryRow("Subtotal", summary.subtotalCents)
+                summaryRow("Tax", summary.taxCents)
+                summaryRow(tipLabel, summary.tipCents)
+                Divider()
+                HStack {
+                    Text("Total").font(.headline)
+                    Spacer()
+                    Text(Money.format(summary.totalCents))
+                        .font(.money(22))
+                        .foregroundStyle(Theme.brand)
+                        .contentTransition(.numericText())
+                }
+            }
+            .padding(.top, 4)
         }
     }
 
-    private func totalsSection(_ summary: BillSummary) -> some View {
-        Section {
-            LabeledContent("Subtotal", value: Money.format(summary.subtotalCents))
-            LabeledContent("Tax", value: Money.format(summary.taxCents))
-            LabeledContent(tipLabel, value: Money.format(summary.tipCents))
-            LabeledContent {
-                Text(Money.format(summary.totalCents)).bold()
-            } label: {
-                Text("Total").bold()
-            }
+    private func summaryRow(_ label: String, _ cents: Int) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(Money.format(cents)).monospacedDigit()
         }
-        .monospacedDigit()
+        .font(.subheadline)
     }
 
-    private func whoOwesSection(_ summary: BillSummary) -> some View {
-        Section {
-            ForEach(summary.shares) { share in
-                DisclosureGroup {
-                    ForEach(Array(share.items.enumerated()), id: \.offset) { _, item in
-                        LabeledContent(item.splitCount > 1 ? "\(item.name) (÷\(item.splitCount))" : item.name,
-                                       value: Money.format(item.cents))
-                    }
-                    LabeledContent("Tax", value: Money.format(share.taxCents))
-                    LabeledContent("Tip", value: Money.format(share.tipCents))
-                } label: {
-                    LabeledContent {
-                        Text(Money.format(share.totalCents))
-                            .font(.headline)
-                            .foregroundStyle(.tint)
-                    } label: {
-                        Text(share.person.name.isEmpty ? "Unnamed" : share.person.name)
-                            .font(.headline)
+    // MARK: Who owes what
+
+    private func whoOwesCard(_ summary: BillSummary) -> some View {
+        CardSection("Who Owes What", systemImage: "checkmark.seal.fill",
+                    footer: "Tax and tip are split based on how much each person ordered.") {
+            VStack(spacing: 10) {
+                ForEach(Array(summary.shares.enumerated()), id: \.element.id) { index, share in
+                    PersonShareRow(share: share, color: Theme.color(for: index), isExpanded: expandedPeople.contains(share.id)) {
+                        withAnimation(.snappy) {
+                            if expandedPeople.contains(share.id) { expandedPeople.remove(share.id) } else { expandedPeople.insert(share.id) }
+                        }
                     }
                 }
-                .font(.subheadline)
             }
-        } header: {
-            Text("Who Owes What")
-        } footer: {
-            Text("Tax and tip are split based on how much each person ordered.")
         }
-        .monospacedDigit()
     }
 
     // MARK: Helpers
+
+    private var selectedTipPreset: Int? {
+        if case .percent(let percent) = bill.tip, percent == percent.rounded(), Self.tipPresets.contains(Int(percent)) {
+            return Int(percent)
+        }
+        return nil
+    }
 
     private var tipLabel: String {
         if case .percent(let percent) = bill.tip {
             return "Tip (\(percent.formatted())%)"
         }
         return "Tip"
-    }
-
-    private func tipChoice(_ summary: BillSummary) -> Binding<Int> {
-        Binding {
-            if case .percent(let percent) = bill.tip, Self.tipPresets.contains(Int(percent)), percent == percent.rounded() {
-                return Int(percent)
-            }
-            return Self.customTip
-        } set: { choice in
-            bill.tip = choice == Self.customTip ? .amount(cents: summary.tipCents) : .percent(Double(choice))
-        }
     }
 
     private var customTipCents: Binding<Int> {
@@ -256,6 +378,14 @@ private struct BillEditor: View {
         } set: {
             bill.tip = .amount(cents: $0)
         }
+    }
+
+    private func addPerson() {
+        let name = newPersonName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        withAnimation(.snappy) { bill.people.append(Person(name: name)) }
+        newPersonName = ""
+        addPersonFocused = true
     }
 
     private func scan(_ image: UIImage) {
@@ -276,14 +406,6 @@ private struct BillEditor: View {
         if let tipCents { bill.tip = .amount(cents: tipCents) }
     }
 
-    private func addPerson() {
-        let name = newPersonName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        bill.people.append(Person(name: name))
-        newPersonName = ""
-        addPersonFocused = true
-    }
-
     private func shareText(_ summary: BillSummary) -> String {
         var lines = ["\(bill.title.isEmpty ? "Our bill" : bill.title) — \(bill.date.formatted(date: .abbreviated, time: .omitted))"]
         lines += summary.shares.map { "\($0.person.name): \(Money.format($0.totalCents))" }
@@ -297,23 +419,95 @@ private struct ItemRow: View {
     let people: [Person]
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        let sharers = people.enumerated().filter { item.sharedBy.contains($0.element.id) }
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(item.name.isEmpty ? "Unnamed item" : item.name)
-                Text(sharedByLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.body.weight(.medium))
+                if sharers.isEmpty || sharers.count == people.count {
+                    Text("Everyone")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Theme.brand)
+                } else {
+                    HStack(spacing: 4) {
+                        ForEach(sharers, id: \.element.id) { index, person in
+                            Avatar(name: person.name, color: Theme.color(for: index), size: 18)
+                        }
+                        Text(sharers.map(\.element.name).formatted(.list(type: .and)))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
             Spacer()
             Text(Money.format(item.priceCents))
-                .monospacedDigit()
+                .font(.money(17, weight: .semibold))
         }
+        .padding(.vertical, 10)
+        .contentShape(.rect)
+    }
+}
+
+private struct PersonShareRow: View {
+    let share: PersonShare
+    let color: Color
+    let isExpanded: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: toggle) {
+                HStack(spacing: 12) {
+                    Avatar(name: share.person.name, color: color, size: 42)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(share.person.name.isEmpty ? "Unnamed" : share.person.name)
+                            .font(.headline)
+                        Text(share.items.count == 1 ? "1 item" : "\(share.items.count) items")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(Money.format(share.totalCents))
+                        .font(.money(20))
+                        .foregroundStyle(color)
+                        .contentTransition(.numericText())
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(share.person.name), \(Money.format(share.totalCents))")
+
+            if isExpanded {
+                VStack(spacing: 8) {
+                    ForEach(Array(share.items.enumerated()), id: \.offset) { _, item in
+                        line(item.splitCount > 1 ? "\(item.name) (÷\(item.splitCount))" : item.name, item.cents)
+                    }
+                    Divider()
+                    line("Tax", share.taxCents)
+                    line("Tip", share.tipCents)
+                }
+                .font(.subheadline)
+                .padding(14)
+                .background(color.opacity(0.08), in: .rect(cornerRadius: 14))
+                .padding(.top, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(12)
+        .background(Theme.field, in: .rect(cornerRadius: 18))
     }
 
-    private var sharedByLabel: String {
-        let names = people.filter { item.sharedBy.contains($0.id) }.map(\.name)
-        if names.isEmpty || names.count == people.count { return "Everyone" }
-        return names.formatted(.list(type: .and))
+    private func line(_ label: String, _ cents: Int) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(Money.format(cents)).monospacedDigit().foregroundStyle(.secondary)
+        }
     }
 }
 

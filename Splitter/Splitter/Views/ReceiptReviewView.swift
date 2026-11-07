@@ -58,6 +58,8 @@ struct ReceiptReviewView: View {
                 }
             }
             .monospacedDigit()
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
             .navigationTitle("Scanned Receipt")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

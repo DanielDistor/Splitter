@@ -3,11 +3,23 @@ import SwiftUI
 @main
 struct SplitterApp: App {
     @State private var store = SplitterApp.makeStore()
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some Scene {
         WindowGroup {
-            BillListView()
-                .environment(store)
+            Group {
+                if hasSeenWelcome || ProcessInfo.processInfo.arguments.contains("-skipWelcome") {
+                    BillListView()
+                        .transition(.opacity)
+                } else {
+                    WelcomeView {
+                        withAnimation(.easeInOut(duration: 0.4)) { hasSeenWelcome = true }
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .environment(store)
+            .tint(Theme.brand)
         }
     }
 

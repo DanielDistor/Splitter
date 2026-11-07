@@ -8,10 +8,10 @@ final class SplitterUITests: XCTestCase {
     /// Creates a bill from scratch the way a person would and checks the split.
     func testSplittingANewBill() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo"]
+        app.launchArguments = ["-demo", "-skipWelcome"]
         app.launch()
 
-        app.navigationBars.buttons["New Bill"].tap()
+        app.buttons["New Bill"].tap()
         let title = app.textFields["What's this bill for?"]
         title.tap()
         title.typeText("Tacos")
@@ -32,20 +32,21 @@ final class SplitterUITests: XCTestCase {
         app.buttons["0%"].tap()
         app.swipeUp()
 
-        XCTAssertTrue(app.staticTexts["$30.00"].exists)
-        XCTAssertTrue(app.staticTexts["$15.00"].waitForExistence(timeout: 2), "Each person should owe half")
+        XCTAssertTrue(app.anyElement(containing: "$30.00").exists)
+        XCTAssertTrue(app.buttons["Dani, $15.00"].waitForExistence(timeout: 2), "Each person should owe half")
         snapshot(app, "4-new-bill")
     }
 
     func testDemoBillBreakdown() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", "-openBill"]
+        app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
         app.launch()
         app.swipeUp()
         snapshot(app, "5-totals")
         app.swipeUp()
-        let alice = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Alice'")).firstMatch
-        XCTAssertTrue(alice.label.contains("$45.36"), "Alice owes her food + proportional tax and tip")
+        let alice = app.buttons["Alice, $45.36"]
+        XCTAssertTrue(alice.waitForExistence(timeout: 2), "Alice owes her food + proportional tax and tip")
+        if !alice.isHittable { app.swipeUp() }
         alice.tap()
         XCTAssertTrue(app.staticTexts["Margherita Pizza (÷2)"].waitForExistence(timeout: 2))
         snapshot(app, "6-who-owes")
@@ -54,16 +55,16 @@ final class SplitterUITests: XCTestCase {
     /// The simulator has no camera, so `-scanDemoReceipt` feeds the scanner a rendered sample receipt.
     func testScanningAReceiptFillsTheBill() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", "-scanDemoReceipt"]
+        app.launchArguments = ["-demo", "-skipWelcome", "-scanDemoReceipt"]
         app.launch()
-        app.navigationBars.buttons["New Bill"].tap()
+        app.buttons["New Bill"].tap()
 
         XCTAssertTrue(app.navigationBars["Scanned Receipt"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Matches the receipt subtotal."].exists)
         snapshot(app, "7-scan-review")
 
         app.buttons["Add 4 Items"].tap()
-        XCTAssertTrue(app.staticTexts["Ribeye"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.anyElement(containing: "Ribeye").waitForExistence(timeout: 3))
         app.swipeUp()
         snapshot(app, "8-scan-added")
         XCTAssertTrue(app.anyElement(containing: "$106.00").exists, "Subtotal from the scanned items")
