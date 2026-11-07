@@ -5,7 +5,7 @@
 <h1 align="center">Splitter</h1>
 
 <p align="center">
-  Scan the receipt, tap who had what, and Splitter figures out what everyone owes down to the penny, tax and tip included.
+  Splitter is an iPhone app that helps you split a restaurant bill with your friends.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 ## First launch
 
-The first time you open Splitter you get a quick welcome that shows what the app does, and you can pull it back up anytime with the ⓘ button on the home screen.
+This is the first thing you see when you open Splitter. You can see it again anytime with the ⓘ button on the home screen.
 
 <p align="center">
   <img src="docs/screenshots/welcome.png" width="300" alt="Welcome to Splitter: scan the receipt, pick who had what, fair to the penny">
@@ -42,23 +42,23 @@ The first time you open Splitter you get a quick welcome that shows what the app
 
 ## What it does
 
-**Scan the receipt** with your camera or pick a photo, and Splitter reads it right on your phone using Apple's Vision, filling in the items, tax and tip and checking them against the receipt's subtotal so you know nothing got missed. A line like "2 Iced Tea" or "Tacos x3" turns into separate items so each one can go to a different person.
+**Scan the receipt.** Take a photo of the receipt and Splitter fills in the items, tax and tip for you. It reads the receipt on your phone using Apple's Vision.
 
-**Tap who had what** by tapping people's initials under each item, whether it's a pizza two people shared or a bottle of wine for the whole table, and anyone you add later automatically joins the items everyone shared.
+**Tap who had what.** Each item shows everyone's initials. Tap the people who had it, like two people sharing a pizza or the whole table sharing a bottle of wine.
 
-**It's fair to the penny** because tax and tip get split based on how much each person actually ordered instead of evenly, and all the math is done in whole cents so everyone's shares always add up to the exact total.
+**Fair to the penny.** Tax and tip are split by how much each person ordered instead of evenly. Everyone's shares always add up to the exact total.
 
-**Settle up** by marking who put the bill on their card, then everyone else shows up as owing them and you tick people off as they pay you back, while the home screen keeps track of which bills you're still waiting on.
+**Settle up.** Mark who paid the bill and check people off as they pay them back.
 
-**Get paid back** with a Venmo request that opens with the amount and bill name already filled in, a reminder text that writes itself, or one tap to share the whole split with the group chat.
+**Get paid back.** Send a Venmo request with the amount already filled in, or share the whole split in your group chat.
 
-**Edit anything** from adding a fourth person you forgot about to splitting one line into a few items or changing the tip, and every total updates as you go, with an Undo button in case you delete something by accident.
+**Edit anything.** Add someone you forgot, change who had what or fix the tip and everything updates. If you delete something by accident you can tap Undo.
 
-**Your bills stay private** since there are no accounts, servers or tracking, and everything is saved on your phone and never leaves it.
+**Private.** There are no accounts and nothing gets uploaded. Your bills stay on your phone.
 
 ## How the split works
 
-Take the Birthday Dinner from the screenshots, where Alice and Bob shared an $18 pizza, Cara had a $34 ribeye, Alice also had a $12 salad, and the whole table shared a $42 bottle of wine, with $10.16 in tax and a 20% tip.
+Here's the Birthday Dinner from the screenshots. Alice and Bob shared an $18 pizza and Alice also had a $12 salad. Cara had a $34 ribeye. Everyone shared a $42 bottle of wine. Tax was $10.16 and they tipped 20%.
 
 | | Food | Share of tax | Share of tip | **Owes** |
 |---|---:|---:|---:|---:|
@@ -67,17 +67,17 @@ Take the Birthday Dinner from the screenshots, where Alice and Bob shared an $18
 | Cara | $34 + $14 = $48.00 | $4.60 | $9.60 | **$62.20** |
 | **Total** | $106.00 | $10.16 | $21.20 | **$137.36** |
 
-Tax and tip follow how much food each person had, so Cara ends up covering the biggest share since she ordered the most, and any leftover pennies from rounding go to whoever was closest to the next cent (the [largest remainder method](https://en.wikipedia.org/wiki/Largest_remainder_method)) so the shares always land exactly on the total.
+Cara ordered the most food so she pays the most tax and tip. When the math doesn't divide evenly the extra pennies go to whoever was closest to the next cent, so the shares always add up to the exact total.
 
 ## Build & run
 
-All you need is a Mac with Xcode 16 or newer, and the app runs on iOS 17.2 and up. Clone the repo, open `Splitter/Splitter.xcodeproj`, pick a simulator or your iPhone at the top of the window and hit **Run** (⌘R). If you're running it on a real iPhone, go to the **Splitter** target under **Signing & Capabilities** and choose your team first. There's nothing else to install or set up, so no packages, API keys or backend.
+You need a Mac with Xcode 16 or newer. Open `Splitter/Splitter.xcodeproj`, pick a simulator or your iPhone at the top and press **Run** (⌘R). To run it on your own iPhone, pick your team under **Signing & Capabilities** first. There's nothing else to install or set up.
 
-> **Tip:** the simulator doesn't have a camera, so to try scanning there just drag a receipt photo onto the simulator window and use **Scan Receipt → Choose from Photos**.
+> **Tip:** The simulator has no camera. To try scanning there, drag a receipt photo onto the simulator and use **Scan Receipt → Choose from Photos**.
 
 ### Debug launch arguments
 
-You can add these under **Product → Scheme → Edit Scheme → Run → Arguments** in debug builds.
+Add these under **Product → Scheme → Edit Scheme → Run → Arguments** to help with testing.
 
 | Argument | What it does |
 |---|---|
@@ -94,7 +94,7 @@ xcodebuild test -project Splitter.xcodeproj -scheme Splitter \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
 ```
 
-There are 45 tests in total. The 39 unit tests cover the split math and rounding, reading receipts (including pulling text off a real rendered receipt image), quantities, editing who had what, settling up, search, and saving and loading, including making sure bills saved by older versions still open. The 6 UI tests drive the actual app the way a person would, creating a bill, scanning a receipt, adding a fourth person to an existing bill, undoing a delete and settling up.
+There are 45 tests. The unit tests check the split math, receipt scanning, settling up and saving your bills. The UI tests use the app the way a person would to make sure the main things work.
 
 ## Project structure
 
@@ -112,7 +112,9 @@ Splitter/
 
 ## History
 
-Splitter started in spring 2024 as a class project that used Firebase for sign-in and storage and had a recipe tab powered by TheMealDB, and in 2026 it got rebuilt from the ground up as a focused, offline bill splitter. The original is still here exactly as it was, under the [`v1-original`](https://github.com/DanielDistor/Splitter/tree/v1-original) tag and the [`original-2024`](https://github.com/DanielDistor/Splitter/tree/original-2024) branch, along with the original project write-up in [`docs/original-2024/`](docs/original-2024/aboutme.md).
+Splitter started in 2024 as a class project. That version had sign-in and a recipe tab. In 2026 I rebuilt it to focus on splitting bills.
+
+The original version is saved under the [`v1-original`](https://github.com/DanielDistor/Splitter/tree/v1-original) tag and the [`original-2024`](https://github.com/DanielDistor/Splitter/tree/original-2024) branch. The original write-up is in [`docs/original-2024/`](docs/original-2024/aboutme.md).
 
 ---
 
