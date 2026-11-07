@@ -3,18 +3,17 @@ import SwiftUI
 @main
 struct SplitterApp: App {
     @State private var store = SplitterApp.makeStore()
-    /// The welcome screen opens the app every time it launches; "Get Started" goes to your bills.
-    @State private var showWelcome = !ProcessInfo.processInfo.arguments.contains("-skipWelcome")
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if !showWelcome {
+                if hasSeenWelcome || ProcessInfo.processInfo.arguments.contains("-skipWelcome") {
                     BillListView()
                         .transition(.opacity)
                 } else {
                     WelcomeView {
-                        withAnimation(.easeInOut(duration: 0.4)) { showWelcome = false }
+                        withAnimation(.easeInOut(duration: 0.4)) { hasSeenWelcome = true }
                     }
                     .transition(.opacity)
                 }
