@@ -51,6 +51,25 @@ final class SplitterUITests: XCTestCase {
         snapshot(app, "6-who-owes")
     }
 
+    /// The simulator has no camera, so `-scanDemoReceipt` feeds the scanner a rendered sample receipt.
+    func testScanningAReceiptFillsTheBill() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-scanDemoReceipt"]
+        app.launch()
+        app.navigationBars.buttons["New Bill"].tap()
+
+        XCTAssertTrue(app.navigationBars["Scanned Receipt"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Matches the receipt subtotal."].exists)
+        snapshot(app, "7-scan-review")
+
+        app.buttons["Add 4 Items"].tap()
+        XCTAssertTrue(app.staticTexts["Ribeye"].waitForExistence(timeout: 3))
+        app.swipeUp()
+        snapshot(app, "8-scan-added")
+        XCTAssertTrue(app.anyElement(containing: "$106.00").exists, "Subtotal from the scanned items")
+        XCTAssertTrue(app.anyElement(containing: "$10.16").exists, "Tax picked up from the receipt")
+    }
+
     private func snapshot(_ app: XCUIApplication, _ name: String) {
         let shot = app.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
@@ -60,5 +79,11 @@ final class SplitterUITests: XCTestCase {
         if let dir = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
             try? shot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
         }
+    }
+}
+
+private extension XCUIApplication {
+    func anyElement(containing text: String) -> XCUIElement {
+        descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
     }
 }

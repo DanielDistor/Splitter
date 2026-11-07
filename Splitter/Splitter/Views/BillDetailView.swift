@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct BillDetailView: View {
@@ -19,6 +20,13 @@ private struct BillEditor: View {
     @State private var newPersonName = ""
     @State private var editingItem: BillItem?
     @FocusState private var addPersonFocused: Bool
+
+    @State private var showCamera = false
+    @State private var showPhotoPicker = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var isScanning = false
+    @State private var scanned: ScannedReceipt?
+    @State private var scanError: String?
 
     private static let tipPresets = [0, 15, 18, 20]
     private static let customTip = -1
@@ -56,6 +64,49 @@ private struct BillEditor: View {
                     bill.items.append(saved)
                 }
             }
+        }
+        .sheet(item: $scanned) { receipt in
+            ReceiptReviewView(receipt: receipt, onAdd: addScanned)
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            DocumentCamera { image in
+                showCamera = false
+                scan(image)
+            } onCancel: {
+                showCamera = false
+            }
+            .ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            pickedPhoto = nil
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                    scan(image)
+                } else {
+                    scanError = "That photo couldn't be opened."
+                }
+            }
+        }
+        .overlay {
+            if isScanning {
+                ProgressView("Reading receipt…")
+                    .padding(24)
+                    .background(.regularMaterial, in: .rect(cornerRadius: 16))
+            }
+        }
+        .alert("Couldn't Scan", isPresented: Binding { scanError != nil } set: { if !$0 { scanError = nil } }) {
+            Button("OK") {}
+        } message: {
+            Text(scanError ?? "")
+        }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-scanDemoReceipt"), scanned == nil {
+                scan(DemoData.receiptImage())
+            }
+            #endif
         }
     }
 
@@ -97,6 +148,15 @@ private struct BillEditor: View {
             Button("Add Item", systemImage: "plus") {
                 editingItem = BillItem(name: "", priceCents: 0)
             }
+            Menu {
+                if DocumentCamera.isAvailable {
+                    Button("Take Photo", systemImage: "camera") { showCamera = true }
+                }
+                Button("Choose from Photos", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
+            } label: {
+                Label("Scan Receipt", systemImage: "doc.text.viewfinder")
+            }
+            .disabled(isScanning)
         } header: {
             Text("Items")
         } footer: {
@@ -196,6 +256,24 @@ private struct BillEditor: View {
         } set: {
             bill.tip = .amount(cents: $0)
         }
+    }
+
+    private func scan(_ image: UIImage) {
+        isScanning = true
+        Task {
+            defer { isScanning = false }
+            do {
+                scanned = try await ReceiptScanner.scan(image)
+            } catch {
+                scanError = error.localizedDescription
+            }
+        }
+    }
+
+    private func addScanned(_ items: [ScannedItem], taxCents: Int?, tipCents: Int?) {
+        bill.items += items.map { BillItem(name: $0.name, priceCents: $0.priceCents) }
+        if let taxCents { bill.taxCents = taxCents }
+        if let tipCents { bill.tip = .amount(cents: tipCents) }
     }
 
     private func addPerson() {
