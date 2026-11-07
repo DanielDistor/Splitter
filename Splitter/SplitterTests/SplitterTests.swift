@@ -143,3 +143,64 @@ final class BillStoreTests: XCTestCase {
         XCTAssertEqual(reopened.bills, [bill])
     }
 }
+
+final class EditingWhoHadWhatTests: XCTestCase {
+    private let alice = Person(name: "Alice")
+    private let bob = Person(name: "Bob")
+    private let cara = Person(name: "Cara")
+
+    func testNewPersonJoinsEverythingSharedByEveryone() {
+        var bill = Bill(title: "Dinner", people: [alice, bob, cara])
+        bill.items = [BillItem(name: "Wine", priceCents: 3_000)]
+        bill.tip = .percent(0)
+        let dana = Person(name: "Dana")
+        bill.people.append(dana) // "it was 4 people after all"
+        XCTAssertEqual(Split.summarize(bill).shares.map(\.subtotalCents), [750, 750, 750, 750])
+    }
+
+    func testTakingSomeoneOffAnEveryoneItem() {
+        var bill = Bill(title: "Dinner", people: [alice, bob, cara])
+        bill.items = [BillItem(name: "Wine", priceCents: 3_000)]
+        XCTAssertTrue(bill.setPerson(cara.id, had: false, itemID: bill.items[0].id))
+        XCTAssertEqual(bill.sharers(of: bill.items[0]).map(\.name), ["Alice", "Bob"])
+    }
+
+    func testAddingEveryoneBackMeansEveryone() {
+        var bill = Bill(title: "Dinner", people: [alice, bob])
+        bill.items = [BillItem(name: "Soup", priceCents: 800, sharedBy: [alice.id])]
+        bill.setPerson(bob.id, had: true, itemID: bill.items[0].id)
+        XCTAssertEqual(bill.items[0].sharedBy, [], "All selected should become Everyone")
+    }
+
+    func testCannotLeaveAnItemWithNobody() {
+        var bill = Bill(title: "Dinner", people: [alice, bob])
+        bill.items = [BillItem(name: "Soup", priceCents: 800, sharedBy: [alice.id])]
+        XCTAssertFalse(bill.setPerson(alice.id, had: false, itemID: bill.items[0].id))
+        XCTAssertEqual(bill.items[0].sharedBy, [alice.id])
+    }
+
+    func testRemovingAPersonDropsThemFromItems() {
+        var bill = Bill(title: "Dinner", people: [alice, bob, cara])
+        bill.items = [BillItem(name: "Pizza", priceCents: 1_000, sharedBy: [alice.id, cara.id])]
+        bill.removePerson(cara.id)
+        XCTAssertEqual(bill.sharers(of: bill.items[0]).map(\.name), ["Alice"])
+    }
+}
+
+final class BillStoreSafetyTests: XCTestCase {
+    /// If saved bills can't be read (e.g. after a format change), keep a backup instead of overwriting them.
+    func testUnreadableFileIsBackedUpNotOverwritten() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "bills.json")
+        try Data("not json".utf8).write(to: url)
+
+        let store = BillStore(fileURL: url)
+        store.bills = [Bill(title: "New")]
+
+        let backups = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasPrefix("bills-unreadable-") }
+        XCTAssertEqual(backups.count, 1)
+        XCTAssertEqual(try String(contentsOf: dir.appending(path: backups[0]), encoding: .utf8), "not json")
+    }
+}

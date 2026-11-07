@@ -7,7 +7,7 @@ struct WelcomeView: View {
 
     var body: some View {
         ZStack {
-            Theme.heroGradient.ignoresSafeArea()
+            Theme.brandFill.ignoresSafeArea()
 
             VStack(spacing: 28) {
                 Spacer()
@@ -16,7 +16,7 @@ struct WelcomeView: View {
                     .resizable()
                     .frame(width: 112, height: 112)
                     .clipShape(.rect(cornerRadius: 26))
-                    .shadow(color: .black.opacity(0.25), radius: 20, y: 10)
+                    .overlay(RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.25), lineWidth: 1))
                     .scaleEffect(appeared ? 1 : 0.7)
                     .opacity(appeared ? 1 : 0)
                     .animation(.spring(duration: 0.8, bounce: 0.35), value: appeared)
@@ -37,7 +37,7 @@ struct WelcomeView: View {
                     feature("checkmark.seal.fill", "Fair to the penny", "Tax and tip follow what you ordered.")
                 }
                 .padding(22)
-                .background(.white.opacity(0.12), in: .rect(cornerRadius: 24))
+                .background(.white.opacity(0.08), in: .rect(cornerRadius: 24))
                 .fadeIn(appeared, delay: 0.6)
 
                 Spacer()
@@ -49,7 +49,6 @@ struct WelcomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
                         .background(.white, in: Capsule())
-                        .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                 }
                 .fadeIn(appeared, delay: 0.9)
             }

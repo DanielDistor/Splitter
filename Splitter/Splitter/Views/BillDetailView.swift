@@ -3,12 +3,19 @@ import SwiftUI
 
 struct BillDetailView: View {
     @Environment(BillStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     let billID: UUID
 
     var body: some View {
         @Bindable var store = store
         if let index = store.bills.firstIndex(where: { $0.id == billID }) {
-            BillEditor(bill: $store.bills[index])
+            BillEditor(bill: $store.bills[index]) {
+                dismiss()
+                Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    store.delete(ids: [billID])
+                }
+            }
         } else {
             ContentUnavailableView("Bill Deleted", systemImage: "trash")
         }
@@ -17,11 +24,14 @@ struct BillDetailView: View {
 
 private struct BillEditor: View {
     @Binding var bill: Bill
+    let onDeleteBill: () -> Void
     @State private var newPersonName = ""
     @State private var editingItem: BillItem?
+    @State private var editingPerson: PersonRef?
     @State private var expandedPeople: Set<UUID> = []
-    @State private var renamingPerson: Person?
-    @State private var renameText = ""
+    @State private var showAddPerson = false
+    @State private var addPersonText = ""
+    @State private var confirmDeleteBill = false
     @FocusState private var addPersonFocused: Bool
 
     @State private var showCamera = false
@@ -60,6 +70,29 @@ private struct BillEditor: View {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
             .disabled(summary.shares.isEmpty)
+            Menu {
+                Button("Delete Bill", systemImage: "trash", role: .destructive) { confirmDeleteBill = true }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+        }
+        .confirmationDialog("Delete this bill?", isPresented: $confirmDeleteBill, titleVisibility: .visible) {
+            Button("Delete Bill", role: .destructive, action: onDeleteBill)
+        } message: {
+            Text("This can't be undone.")
+        }
+        .sheet(item: $editingPerson) { ref in
+            PersonEditor(bill: $bill, personID: ref.id)
+        }
+        .alert("Add Person", isPresented: $showAddPerson) {
+            TextField("Name", text: $addPersonText)
+            Button("Cancel", role: .cancel) {}
+            Button("Add") {
+                let name = addPersonText.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { withAnimation(.snappy) { bill.people.append(Person(name: name)) } }
+            }
+        } message: {
+            Text("Anything marked \"Everyone\" will include them automatically.")
         }
         .sheet(item: $editingItem) { item in
             let isExisting = bill.items.contains { $0.id == item.id }
@@ -110,15 +143,6 @@ private struct BillEditor: View {
         } message: {
             Text(scanError ?? "")
         }
-        .alert("Rename", isPresented: Binding { renamingPerson != nil } set: { if !$0 { renamingPerson = nil } }) {
-            TextField("Name", text: $renameText)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                if let id = renamingPerson?.id, let index = bill.people.firstIndex(where: { $0.id == id }) {
-                    bill.people[index].name = renameText.trimmingCharacters(in: .whitespaces)
-                }
-            }
-        }
         .task {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-scanDemoReceipt"), scanned == nil {
@@ -168,26 +192,19 @@ private struct BillEditor: View {
         }
         .foregroundStyle(.white)
         .padding(22)
-        .background(Theme.heroGradient, in: .rect(cornerRadius: 28))
-        .shadow(color: Theme.brand.opacity(0.35), radius: 18, y: 10)
+        .background(Theme.brandFill, in: .rect(cornerRadius: 26))
     }
 
     // MARK: People
 
     private var peopleCard: some View {
-        CardSection("People", systemImage: "person.2.fill") {
+        CardSection("People") {
             if !bill.people.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Array(bill.people.enumerated()), id: \.element.id) { index, person in
-                            Menu {
-                                Button("Rename", systemImage: "pencil") {
-                                    renameText = person.name
-                                    renamingPerson = person
-                                }
-                                Button("Remove", systemImage: "person.fill.xmark", role: .destructive) {
-                                    withAnimation { bill.removePeople(at: [index]) }
-                                }
+                            Button {
+                                editingPerson = PersonRef(id: person.id)
                             } label: {
                                 HStack(spacing: 8) {
                                     Avatar(name: person.name, color: Theme.color(for: index), size: 30)
@@ -199,6 +216,7 @@ private struct BillEditor: View {
                                 .padding(.trailing, 10)
                                 .background(Theme.color(for: index).opacity(0.12), in: Capsule())
                             }
+                            .accessibilityLabel(person.name)
                         }
                     }
                 }
@@ -227,7 +245,7 @@ private struct BillEditor: View {
     // MARK: Items
 
     private var itemsCard: some View {
-        CardSection("Items", systemImage: "fork.knife",
+        CardSection("Items",
                     footer: bill.items.isEmpty ? nil : "Tap an item to choose who had it.") {
             VStack(spacing: 0) {
                 ForEach(Array(bill.items.enumerated()), id: \.element.id) { index, item in
@@ -276,7 +294,7 @@ private struct BillEditor: View {
     // MARK: Tax & tip
 
     private func taxAndTipCard(_ summary: BillSummary) -> some View {
-        CardSection("Tax & Tip", systemImage: "percent") {
+        CardSection("Tax & Tip") {
             HStack {
                 Text("Tax")
                 Spacer()
@@ -288,13 +306,17 @@ private struct BillEditor: View {
 
             HStack(spacing: 6) {
                 ForEach(Self.tipPresets, id: \.self) { percent in
-                    Button("\(percent)%") {
+                    Button {
                         bill.tip = .percent(Double(percent))
+                    } label: {
+                        Text("\(percent)%").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(PillButtonStyle(isSelected: selectedTipPreset == percent))
                 }
-                Button("Custom") {
+                Button {
                     if selectedTipPreset != nil { bill.tip = .amount(cents: summary.tipCents) }
+                } label: {
+                    Text("Custom").fixedSize()
                 }
                 .buttonStyle(PillButtonStyle(isSelected: selectedTipPreset == nil))
             }
@@ -341,7 +363,7 @@ private struct BillEditor: View {
     // MARK: Who owes what
 
     private func whoOwesCard(_ summary: BillSummary) -> some View {
-        CardSection("Who Owes What", systemImage: "checkmark.seal.fill",
+        CardSection("Who Owes What",
                     footer: "Tax and tip are split based on how much each person ordered.") {
             VStack(spacing: 10) {
                 ForEach(Array(summary.shares.enumerated()), id: \.element.id) { index, share in
@@ -349,9 +371,19 @@ private struct BillEditor: View {
                         withAnimation(.snappy) {
                             if expandedPeople.contains(share.id) { expandedPeople.remove(share.id) } else { expandedPeople.insert(share.id) }
                         }
+                    } onEdit: {
+                        editingPerson = PersonRef(id: share.id)
                     }
                 }
             }
+            Button {
+                addPersonText = ""
+                showAddPerson = true
+            } label: {
+                Label("Add Person", systemImage: "person.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PillButtonStyle())
         }
     }
 
@@ -449,11 +481,16 @@ private struct ItemRow: View {
     }
 }
 
+private struct PersonRef: Identifiable {
+    let id: UUID
+}
+
 private struct PersonShareRow: View {
     let share: PersonShare
     let color: Color
     let isExpanded: Bool
     let toggle: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -470,7 +507,6 @@ private struct PersonShareRow: View {
                     Spacer()
                     Text(Money.format(share.totalCents))
                         .font(.money(20))
-                        .foregroundStyle(color)
                         .contentTransition(.numericText())
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.bold))
@@ -490,10 +526,16 @@ private struct PersonShareRow: View {
                     Divider()
                     line("Tax", share.taxCents)
                     line("Tip", share.tipCents)
+                    Button(action: onEdit) {
+                        Label("Edit what \(share.person.name) had", systemImage: "pencil")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PillButtonStyle())
+                    .padding(.top, 4)
                 }
                 .font(.subheadline)
                 .padding(14)
-                .background(color.opacity(0.08), in: .rect(cornerRadius: 14))
+                .background(Theme.card, in: .rect(cornerRadius: 14))
                 .padding(.top, 10)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }

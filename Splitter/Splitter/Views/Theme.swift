@@ -3,18 +3,14 @@ import SwiftUI
 /// Splitter's look: the steel blue from the app icon, soft blue-gray backgrounds, rounded cards.
 enum Theme {
     static let brand = Color(light: 0x225E82, dark: 0x5AA3D6)
-    static let brandBright = Color(hex: 0x3C85B5)
     static let brandDeep = Color(hex: 0x163F5A)
-
-    static let heroGradient = LinearGradient(
-        colors: [brandBright, Color(hex: 0x225E82), brandDeep],
-        startPoint: .topLeading, endPoint: .bottomTrailing
-    )
+    /// Solid blue for the big header cards and primary buttons.
+    static let brandFill = Color(light: 0x225E82, dark: 0x1B4A68)
 
     static let background = Color(light: 0xEEF3F8, dark: 0x0B1620)
     static let card = Color(light: 0xFFFFFF, dark: 0x15232F)
     static let field = Color(light: 0xF2F6FA, dark: 0x1D2E3C)
-    static let shadow = Color.black.opacity(0.06)
+    static let border = Color(light: 0xDCE5EE, dark: 0x22344A)
 
     /// Each person on a bill gets their own color, in the order they were added.
     static let personColors: [Color] = [
@@ -45,25 +41,30 @@ extension Font {
     }
 }
 
-/// A white rounded card with a small colored heading.
+extension View {
+    /// Flat card: solid fill and a hairline border, no drop shadow.
+    func card(cornerRadius: CGFloat = 20) -> some View {
+        background(Theme.card, in: .rect(cornerRadius: cornerRadius))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(Theme.border, lineWidth: 1))
+    }
+}
+
+/// A white rounded card with a plain heading.
 struct CardSection<Content: View>: View {
     let title: String
-    let systemImage: String
     var footer: String?
     @ViewBuilder let content: Content
 
-    init(_ title: String, systemImage: String, footer: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String, footer: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
-        self.systemImage = systemImage
         self.footer = footer
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.brand)
+            Text(title)
+                .font(.headline)
             content
             if let footer {
                 Text(footer)
@@ -73,8 +74,7 @@ struct CardSection<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .background(Theme.card, in: .rect(cornerRadius: 24))
-        .shadow(color: Theme.shadow, radius: 16, y: 6)
+        .card()
     }
 }
 
@@ -89,7 +89,7 @@ struct Avatar: View {
             .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(color.gradient, in: Circle())
+            .background(color, in: Circle())
             .accessibilityHidden(true)
     }
 
@@ -131,10 +131,12 @@ struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .padding(.vertical, 10)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .foregroundStyle(isSelected ? Color.white : Theme.brand)
-            .background(isSelected ? AnyShapeStyle(Theme.heroGradient) : AnyShapeStyle(Theme.brand.opacity(0.1)), in: Capsule())
+            .background(isSelected ? Theme.brandFill : Theme.brand.opacity(0.1), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }

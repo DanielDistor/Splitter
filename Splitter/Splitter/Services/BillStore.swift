@@ -12,9 +12,15 @@ final class BillStore {
 
     init(fileURL: URL = URL.documentsDirectory.appending(path: "bills.json")) {
         self.fileURL = fileURL
-        if let data = try? Data(contentsOf: fileURL),
-           let saved = try? JSONDecoder().decode([Bill].self, from: data) {
-            bills = saved
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        do {
+            bills = try JSONDecoder().decode([Bill].self, from: data)
+        } catch {
+            // Never silently overwrite bills we couldn't read — set the file aside first.
+            let stamp = Int(Date.now.timeIntervalSince1970)
+            let backup = fileURL.deletingLastPathComponent().appending(path: "bills-unreadable-\(stamp).json")
+            try? FileManager.default.moveItem(at: fileURL, to: backup)
+            print("Couldn't read saved bills (\(error)); kept a copy at \(backup.lastPathComponent)")
         }
     }
 

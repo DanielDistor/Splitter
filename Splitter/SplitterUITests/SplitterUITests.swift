@@ -71,6 +71,33 @@ final class SplitterUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(containing: "$10.16").exists, "Tax picked up from the receipt")
     }
 
+    /// "Maybe it was 4 people after all": add someone to an existing bill and change what they had.
+    func testAddingAFourthPersonToAnExistingBill() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
+        app.launch()
+
+        let addPerson = app.buttons["Add Person"]
+        for _ in 0..<4 where !addPerson.isHittable { app.swipeUp() }
+        addPerson.tap()
+        app.alerts.textFields["Name"].typeText("Dana")
+        app.alerts.buttons["Add"].tap()
+
+        // Dana automatically shares the wine (marked Everyone): $42 / 4 = $10.50 plus tax and tip.
+        let dana = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Dana, $'")).firstMatch
+        XCTAssertTrue(dana.waitForExistence(timeout: 3))
+        XCTAssertEqual(dana.label, "Dana, $13.61")
+        snapshot(app, "9-four-people")
+
+        // Give Dana a slice of the pizza too.
+        dana.tap()
+        app.buttons["Edit what Dana had"].tap()
+        app.buttons["Margherita Pizza"].tap()
+        snapshot(app, "10-person-editor")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Dana, $21.38'")).firstMatch.waitForExistence(timeout: 3))
+    }
+
     private func snapshot(_ app: XCUIApplication, _ name: String) {
         let shot = app.screenshot()
         let attachment = XCTAttachment(screenshot: shot)

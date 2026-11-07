@@ -6,10 +6,9 @@ struct BillListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            GeometryReader { geometry in
             ScrollView {
                 VStack(spacing: 24) {
-                    header(topInset: geometry.safeAreaInsets.top)
+                    header
 
                     if store.bills.isEmpty {
                         emptyState
@@ -35,8 +34,6 @@ struct BillListView: View {
                 }
                 .padding(.bottom, 110)
             }
-            .ignoresSafeArea(edges: .top)
-            }
             .background(Theme.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottom) { newBillButton }
@@ -49,7 +46,7 @@ struct BillListView: View {
 
     // MARK: Pieces
 
-    private func header(topInset: CGFloat) -> some View {
+    private var header: some View {
         let total = store.bills.reduce(0) { $0 + Split.summarize($1).totalCents }
         let friends = Set(store.bills.flatMap { $0.people.map { $0.name.lowercased() } }).count
 
@@ -79,15 +76,11 @@ struct BillListView: View {
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 24)
-        .padding(.top, topInset + 8)
-        .padding(.bottom, 30)
+        .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            UnevenRoundedRectangle(bottomLeadingRadius: 36, bottomTrailingRadius: 36)
-                .fill(Theme.heroGradient)
-                .shadow(color: Theme.brand.opacity(0.3), radius: 20, y: 10)
-        }
+        .background(Theme.brandFill, in: .rect(cornerRadius: 26))
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     private var emptyState: some View {
@@ -106,8 +99,7 @@ struct BillListView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(Theme.card, in: .rect(cornerRadius: 24))
-        .shadow(color: Theme.shadow, radius: 16, y: 6)
+        .card()
         .padding(.horizontal, 20)
     }
 
@@ -118,8 +110,7 @@ struct BillListView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 17)
-                .background(Theme.heroGradient, in: Capsule())
-                .shadow(color: Theme.brandDeep.opacity(0.35), radius: 16, y: 8)
+                .background(Theme.brandFill, in: Capsule())
         }
         .padding(.bottom, 10)
     }
@@ -179,8 +170,7 @@ private struct BillCard: View {
             .fixedSize()
         }
         .padding(16)
-        .background(Theme.card, in: .rect(cornerRadius: 22))
-        .shadow(color: Theme.shadow, radius: 14, y: 5)
+        .card()
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }
