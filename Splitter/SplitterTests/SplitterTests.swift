@@ -221,3 +221,78 @@ final class UndoDeleteTests: XCTestCase {
         XCTAssertEqual(store.bills, [bill])
     }
 }
+
+final class SettleUpTests: XCTestCase {
+    private let alice = Person(name: "Alice")
+    private let bob = Person(name: "Bob")
+    private let cara = Person(name: "Cara")
+
+    private func dinner() -> Bill {
+        var bill = Bill(title: "Dinner", people: [alice, bob, cara])
+        bill.items = [BillItem(name: "Pizza", priceCents: 3_000)]
+        bill.tip = .percent(0)
+        return bill
+    }
+
+    func testPayerWaitsOnEveryoneElse() {
+        var bill = dinner()
+        bill.paidBy = alice.id
+        XCTAssertFalse(bill.stillOwes(alice.id))
+        XCTAssertEqual(bill.outstandingCents, 2_000)
+        bill.settled.insert(bob.id)
+        XCTAssertEqual(bill.outstandingCents, 1_000)
+        bill.settled.insert(cara.id)
+        XCTAssertTrue(bill.isFullySettled)
+    }
+
+    func testNoPayerMeansNothingOutstanding() {
+        XCTAssertEqual(dinner().outstandingCents, 0)
+        XCTAssertFalse(dinner().isFullySettled)
+    }
+
+    func testRemovingThePayerClearsIt() {
+        var bill = dinner()
+        bill.paidBy = alice.id
+        bill.removePerson(alice.id)
+        XCTAssertNil(bill.paidBy)
+    }
+
+    /// Bills saved before "who paid" existed must still open.
+    func testOldSavedBillsStillLoad() throws {
+        let old = #"[{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","title":"Old","date":700000000,"people":[],"items":[],"taxCents":100,"tip":{"percent":{"_0":18}}}]"#
+        let bills = try JSONDecoder().decode([Bill].self, from: Data(old.utf8))
+        XCTAssertEqual(bills.first?.title, "Old")
+        XCTAssertNil(bills.first?.paidBy)
+        XCTAssertEqual(bills.first?.settled, [])
+    }
+
+    func testVenmoLink() {
+        let url = Money.venmoRequestURL(cents: 2_980, note: "Birthday Dinner")
+        XCTAssertEqual(url.absoluteString, "venmo://paycharge?txn=charge&amount=29.80&note=Birthday%20Dinner")
+    }
+}
+
+final class SearchAndGroupingTests: XCTestCase {
+    func testSearchMatchesTitlesAndPeople() {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = BillStore(fileURL: url)
+        store.bills = [
+            Bill(title: "Taco Night", people: [Person(name: "Sam")]),
+            Bill(title: "Brunch", people: [Person(name: "Alice")]),
+        ]
+        XCTAssertEqual(store.search("taco").map(\.title), ["Taco Night"])
+        XCTAssertEqual(store.search("ALICE").map(\.title), ["Brunch"])
+        XCTAssertEqual(store.search("").count, 2)
+    }
+
+    func testGroupsByMonthNewestFirst() {
+        let calendar = Calendar(identifier: .gregorian)
+        let nov = calendar.date(from: DateComponents(year: 2026, month: 11, day: 5))!
+        let nov2 = calendar.date(from: DateComponents(year: 2026, month: 11, day: 20))!
+        let oct = calendar.date(from: DateComponents(year: 2026, month: 10, day: 31))!
+        let bills = [Bill(title: "A", date: oct), Bill(title: "B", date: nov), Bill(title: "C", date: nov2)]
+        let groups = BillStore.byMonth(bills, calendar: calendar)
+        XCTAssertEqual(groups.map { $0.bills.map(\.title) }, [["C", "B"], ["A"]])
+    }
+}

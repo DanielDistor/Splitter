@@ -36,6 +36,10 @@ struct Bill: Identifiable, Codable, Hashable {
     var items: [BillItem] = []
     var taxCents: Int = 0
     var tip: Tip = .percent(18)
+    /// Who put the bill on their card. Everyone else pays them back.
+    var paidBy: UUID?
+    /// People who've already paid the payer back.
+    var settled: Set<UUID> = []
 
     /// Who is paying for an item. An empty `sharedBy` means everyone, including people added later.
     func sharers(of item: BillItem) -> [Person] {
@@ -65,11 +69,49 @@ struct Bill: Identifiable, Codable, Hashable {
         }
     }
 
+    var payer: Person? { people.first { $0.id == paidBy } }
+
+    /// Someone who still owes the payer money (everyone except the payer, until they're marked paid).
+    func stillOwes(_ personID: UUID) -> Bool {
+        paidBy != nil && personID != paidBy && !settled.contains(personID)
+    }
+
+    /// How much the payer is still waiting to get back.
+    var outstandingCents: Int {
+        Split.summarize(self).shares.filter { stillOwes($0.id) }.reduce(0) { $0 + $1.totalCents }
+    }
+
+    var isFullySettled: Bool {
+        paidBy != nil && people.allSatisfy { !stillOwes($0.id) }
+    }
+
     mutating func removePeople(at offsets: IndexSet) {
         let removed = Set(offsets.map { people[$0].id })
         people.remove(atOffsets: offsets)
+        settled.subtract(removed)
+        if let paidBy, removed.contains(paidBy) { self.paidBy = nil }
         for index in items.indices {
             items[index].sharedBy.subtract(removed)
         }
+    }
+}
+
+extension Bill {
+    private enum CodingKeys: String, CodingKey {
+        case id, title, date, people, items, taxCents, tip, paidBy, settled
+    }
+
+    /// Reads bills saved by older versions too: fields added later fall back to their defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? .now
+        people = try c.decodeIfPresent([Person].self, forKey: .people) ?? []
+        items = try c.decodeIfPresent([BillItem].self, forKey: .items) ?? []
+        taxCents = try c.decodeIfPresent(Int.self, forKey: .taxCents) ?? 0
+        tip = try c.decodeIfPresent(Tip.self, forKey: .tip) ?? .percent(18)
+        paidBy = try c.decodeIfPresent(UUID.self, forKey: .paidBy)
+        settled = try c.decodeIfPresent(Set<UUID>.self, forKey: .settled) ?? []
     }
 }

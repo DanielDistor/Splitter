@@ -3,6 +3,7 @@ import SwiftUI
 /// Edit one person on a bill: their name, what they had, or take them off the bill.
 struct PersonEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Binding var bill: Bill
     let personID: UUID
     let onRemove: () -> Void
@@ -23,8 +24,15 @@ struct PersonEditor: View {
     private func form(index: Int) -> some View {
         let person = bill.people[index]
         let name = person.name.isEmpty ? "Person" : person.name
+        let share = Split.summarize(bill).shares.first { $0.id == personID }
         return Form {
             headerSection(index: index)
+            if let share {
+                breakdownSection(share)
+                if let payer = bill.payer, payer.id != personID, share.totalCents > 0 {
+                    requestSection(share, payer: payer)
+                }
+            }
             itemsSection(color: Theme.color(for: index), name: person.name)
             Section {
                 Button("Remove \(name) from Bill", role: .destructive) { confirmRemove = true }
@@ -62,6 +70,44 @@ struct PersonEditor: View {
                 LabeledContent("Owes", value: Money.format(share.totalCents))
                     .font(.headline)
             }
+        }
+    }
+
+    private func breakdownSection(_ share: PersonShare) -> some View {
+        Section("Breakdown") {
+            ForEach(Array(share.items.enumerated()), id: \.offset) { _, item in
+                LabeledContent(item.splitCount > 1 ? "\(item.name) (÷\(item.splitCount))" : item.name,
+                               value: Money.format(item.cents))
+            }
+            LabeledContent("Tax", value: Money.format(share.taxCents))
+            LabeledContent("Tip", value: Money.format(share.tipCents))
+        }
+        .monospacedDigit()
+    }
+
+    private func requestSection(_ share: PersonShare, payer: Person) -> some View {
+        let note = bill.title.isEmpty ? "Splitter" : bill.title
+        let message = "Hey \(share.person.name)! Your share of \(note) is \(Money.format(share.totalCents)) — you can send it to \(payer.name). 🙏"
+        return Section {
+            Button {
+                openURL(Money.venmoRequestURL(cents: share.totalCents, note: note)) { opened in
+                    if !opened { openURL(Money.venmoRequestURL(cents: share.totalCents, note: note, app: false)) }
+                }
+            } label: {
+                Label("Request on Venmo", systemImage: "arrow.down.left.circle")
+            }
+            ShareLink(item: message) {
+                Label("Send a Reminder Text", systemImage: "message")
+            }
+            Toggle("Paid \(payer.name) back", isOn: Binding {
+                bill.settled.contains(personID)
+            } set: { paid in
+                if paid { bill.settled.insert(personID) } else { bill.settled.remove(personID) }
+            })
+        } header: {
+            Text("Get \(Money.format(share.totalCents)) back")
+        } footer: {
+            Text("Venmo opens with the amount and note filled in — just pick \(share.person.name).")
         }
     }
 

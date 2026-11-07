@@ -22,15 +22,13 @@ struct BillDetailView: View {
     }
 }
 
+/// The bill screen, answer first: total and who owes what at the top, then items, tax and tip.
 private struct BillEditor: View {
     @Binding var bill: Bill
     let onDeleteBill: () -> Void
     @State private var newPersonName = ""
     @State private var editingItem: BillItem?
     @State private var editingPerson: PersonRef?
-    @State private var expandedPeople: Set<UUID> = []
-    @State private var showAddPerson = false
-    @State private var addPersonText = ""
     @State private var confirmDeleteBill = false
     @State private var undo: UndoAction?
     @FocusState private var addPersonFocused: Bool
@@ -47,19 +45,26 @@ private struct BillEditor: View {
     var body: some View {
         let summary = Split.summarize(bill)
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 hero(summary)
-                peopleCard
+                whoOwesCard(summary)
                 itemsCard
                 taxAndTipCard(summary)
                 if !summary.shares.isEmpty {
-                    whoOwesCard(summary)
+                    ShareLink(item: shareText(summary)) {
+                        Label("Share with the Group", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PillButtonStyle(isSelected: true))
+                    .controlSize(.large)
                 }
             }
             .padding(.horizontal, 18)
             .padding(.top, 8)
             .padding(.bottom, 40)
             .animation(.snappy, value: summary)
+            .animation(.snappy, value: bill.settled)
+            .animation(.snappy, value: bill.paidBy)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Theme.background.ignoresSafeArea())
@@ -67,11 +72,10 @@ private struct BillEditor: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.background, for: .navigationBar)
         .toolbar {
-            ShareLink(item: shareText(summary)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            .disabled(summary.shares.isEmpty)
             Menu {
+                ShareLink(item: shareText(summary)) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
                 Button("Delete Bill", systemImage: "trash", role: .destructive) { confirmDeleteBill = true }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
@@ -80,20 +84,10 @@ private struct BillEditor: View {
         .confirmationDialog("Delete this bill?", isPresented: $confirmDeleteBill, titleVisibility: .visible) {
             Button("Delete Bill", role: .destructive, action: onDeleteBill)
         } message: {
-            Text("This can't be undone.")
+            Text("You can undo this for a few seconds.")
         }
         .sheet(item: $editingPerson) { ref in
             PersonEditor(bill: $bill, personID: ref.id) { removePerson(ref.id) }
-        }
-        .alert("Add Person", isPresented: $showAddPerson) {
-            TextField("Name", text: $addPersonText)
-            Button("Cancel", role: .cancel) {}
-            Button("Add") {
-                let name = addPersonText.trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty { withAnimation(.snappy) { bill.people.append(Person(name: name)) } }
-            }
-        } message: {
-            Text("Anything marked \"Everyone\" will include them automatically.")
         }
         .sheet(item: $editingItem) { item in
             let isExisting = bill.items.contains { $0.id == item.id }
@@ -162,42 +156,37 @@ private struct BillEditor: View {
         }
     }
 
-    // MARK: Hero
+    // MARK: Header
 
     private func hero(_ summary: BillSummary) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             TextField("What's this bill for?", text: $bill.title,
                       prompt: Text("What's this bill for?").foregroundStyle(.white.opacity(0.55)))
                 .font(.title2.bold())
 
-            DatePicker("Date", selection: $bill.date, displayedComponents: .date)
-                .labelsHidden()
-                .colorScheme(.dark)
-                .tint(.white)
-
-            Rectangle().fill(.white.opacity(0.2)).frame(height: 1)
-
-            HStack(alignment: .bottom) {
+            HStack(alignment: .lastTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("TOTAL")
                         .font(.caption.weight(.semibold))
                         .tracking(1)
                         .foregroundStyle(.white.opacity(0.7))
                     Text(Money.format(summary.totalCents))
-                        .font(.money(42))
+                        .font(.money(40))
                         .contentTransition(.numericText())
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                 }
                 Spacer()
-                if !bill.people.isEmpty {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        AvatarStack(people: bill.people, size: 30, outline: Theme.brand)
-                        Text(bill.people.count == 1 ? "1 person" : "\(bill.people.count) people")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
+                DatePicker("Date", selection: $bill.date, displayedComponents: .date)
+                    .labelsHidden()
+                    .colorScheme(.dark)
+                    .tint(.white)
+            }
+
+            if bill.paidBy != nil {
+                Text(settleSummary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
             }
         }
         .foregroundStyle(.white)
@@ -205,32 +194,31 @@ private struct BillEditor: View {
         .background(Theme.brandFill, in: .rect(cornerRadius: 26))
     }
 
-    // MARK: People
+    private var settleSummary: String {
+        guard let payer = bill.payer else { return "" }
+        if bill.isFullySettled { return "Everyone has paid \(payer.name) back." }
+        return "\(payer.name) paid · waiting on \(Money.format(bill.outstandingCents))"
+    }
 
-    private var peopleCard: some View {
-        CardSection("People") {
+    // MARK: Who owes what
+
+    private func whoOwesCard(_ summary: BillSummary) -> some View {
+        CardSection("Who Owes What",
+                    footer: summary.shares.isEmpty ? nil : "Tax and tip are split based on how much each person ordered. Tap someone to see their breakdown.") {
             if !bill.people.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(bill.people.enumerated()), id: \.element.id) { index, person in
-                            Button {
-                                editingPerson = PersonRef(id: person.id)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Avatar(name: person.name, color: Theme.color(for: index), size: 30)
-                                    Text(person.name.isEmpty ? "Unnamed" : person.name)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                }
-                                .padding(4)
-                                .padding(.trailing, 10)
-                                .background(Theme.color(for: index).opacity(0.12), in: Capsule())
-                            }
-                            .accessibilityLabel(person.name)
-                        }
-                    }
+                payerPicker
+            }
+
+            VStack(spacing: 8) {
+                ForEach(Array(summary.shares.enumerated()), id: \.element.id) { index, share in
+                    ShareRow(
+                        share: share,
+                        color: Theme.color(for: index),
+                        status: status(for: share.person),
+                        open: { editingPerson = PersonRef(id: share.id) },
+                        toggleSettled: { toggleSettled(share.id) }
+                    )
                 }
-                .scrollClipDisabled()
             }
 
             HStack(spacing: 10) {
@@ -247,29 +235,62 @@ private struct BillEditor: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .background(Theme.field, in: .rect(cornerRadius: 14))
         }
+    }
+
+    private var payerPicker: some View {
+        HStack {
+            Text("Who paid?")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Menu {
+                Button("Not set") { bill.paidBy = nil; bill.settled = [] }
+                ForEach(bill.people) { person in
+                    Button(person.name) {
+                        bill.paidBy = person.id
+                        bill.settled.remove(person.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(bill.payer?.name ?? "Choose")
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                }
+                .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityLabel("Who paid")
+        }
+    }
+
+    private func status(for person: Person) -> ShareRow.Status {
+        guard let payer = bill.payer else { return .none }
+        if person.id == payer.id { return .paid(waitingOn: bill.outstandingCents) }
+        return bill.settled.contains(person.id) ? .settled(payer: payer.name) : .owes(payer: payer.name)
+    }
+
+    private func toggleSettled(_ id: UUID) {
+        if bill.settled.contains(id) { bill.settled.remove(id) } else { bill.settled.insert(id) }
     }
 
     // MARK: Items
 
     private var itemsCard: some View {
         CardSection("Items",
-                    footer: bill.items.isEmpty ? nil : "Tap an item to choose who had it.") {
+                    footer: bill.items.isEmpty || bill.people.isEmpty ? nil : "Tap the initials to choose who had each item. Tap the name to edit it.") {
             VStack(spacing: 0) {
                 ForEach(Array(bill.items.enumerated()), id: \.element.id) { index, item in
                     if index > 0 { Divider() }
-                    Button {
-                        editingItem = item
-                    } label: {
-                        ItemRow(item: item, people: bill.people)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Delete Item", systemImage: "trash", role: .destructive) {
-                            deleteItem(item)
+                    QuickAssignRow(item: item, bill: bill, edit: { editingItem = item }) { personID in
+                        let had = bill.person(personID, had: item)
+                        withAnimation(.snappy(duration: 0.2)) {
+                            _ = bill.setPerson(personID, had: !had, itemID: item.id)
                         }
+                    }
+                    .contextMenu {
+                        Button("Delete Item", systemImage: "trash", role: .destructive) { deleteItem(item) }
                     }
                 }
             }
@@ -352,8 +373,7 @@ private struct BillEditor: View {
                     Text("Total").font(.headline)
                     Spacer()
                     Text(Money.format(summary.totalCents))
-                        .font(.money(22))
-                        .foregroundStyle(Theme.brand)
+                        .font(.money(20))
                         .contentTransition(.numericText())
                 }
             }
@@ -368,33 +388,6 @@ private struct BillEditor: View {
             Text(Money.format(cents)).monospacedDigit()
         }
         .font(.subheadline)
-    }
-
-    // MARK: Who owes what
-
-    private func whoOwesCard(_ summary: BillSummary) -> some View {
-        CardSection("Who Owes What",
-                    footer: "Tax and tip are split based on how much each person ordered.") {
-            VStack(spacing: 10) {
-                ForEach(Array(summary.shares.enumerated()), id: \.element.id) { index, share in
-                    PersonShareRow(share: share, color: Theme.color(for: index), isExpanded: expandedPeople.contains(share.id)) {
-                        withAnimation(.snappy) {
-                            if expandedPeople.contains(share.id) { expandedPeople.remove(share.id) } else { expandedPeople.insert(share.id) }
-                        }
-                    } onEdit: {
-                        editingPerson = PersonRef(id: share.id)
-                    }
-                }
-            }
-            Button {
-                addPersonText = ""
-                showAddPerson = true
-            } label: {
-                Label("Add Person", systemImage: "person.badge.plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(PillButtonStyle())
-        }
     }
 
     // MARK: Helpers
@@ -479,44 +472,16 @@ private struct BillEditor: View {
 
     private func shareText(_ summary: BillSummary) -> String {
         var lines = ["\(bill.title.isEmpty ? "Our bill" : bill.title) — \(bill.date.formatted(date: .abbreviated, time: .omitted))"]
-        lines += summary.shares.map { "\($0.person.name): \(Money.format($0.totalCents))" }
-        lines.append("Total: \(Money.format(summary.totalCents))")
-        return lines.joined(separator: "\n")
-    }
-}
-
-private struct ItemRow: View {
-    let item: BillItem
-    let people: [Person]
-
-    var body: some View {
-        let sharers = people.enumerated().filter { item.sharedBy.contains($0.element.id) }
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.name.isEmpty ? "Unnamed item" : item.name)
-                    .font(.body.weight(.medium))
-                if sharers.isEmpty || sharers.count == people.count {
-                    Text("Everyone")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Theme.brand)
-                } else {
-                    HStack(spacing: 4) {
-                        ForEach(sharers, id: \.element.id) { index, person in
-                            Avatar(name: person.name, color: Theme.color(for: index), size: 18)
-                        }
-                        Text(sharers.map(\.element.name).formatted(.list(type: .and)))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            Spacer()
-            Text(Money.format(item.priceCents))
-                .font(.money(17, weight: .semibold))
+        if let payer = bill.payer {
+            lines.append("\(payer.name) paid \(Money.format(summary.totalCents)).")
+            lines += summary.shares
+                .filter { $0.id != payer.id }
+                .map { "\($0.person.name) owes \(payer.name) \(Money.format($0.totalCents))\(bill.settled.contains($0.id) ? " ✓ paid" : "")" }
+        } else {
+            lines += summary.shares.map { "\($0.person.name): \(Money.format($0.totalCents))" }
+            lines.append("Total: \(Money.format(summary.totalCents))")
         }
-        .padding(.vertical, 10)
-        .contentShape(.rect)
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -524,71 +489,130 @@ private struct PersonRef: Identifiable {
     let id: UUID
 }
 
-private struct PersonShareRow: View {
+/// One person's line in Who Owes What: their total, and whether they've paid the payer back.
+private struct ShareRow: View {
+    enum Status {
+        case none
+        case paid(waitingOn: Int)
+        case owes(payer: String)
+        case settled(payer: String)
+    }
+
     let share: PersonShare
     let color: Color
-    let isExpanded: Bool
-    let toggle: () -> Void
-    let onEdit: () -> Void
+    let status: Status
+    let open: () -> Void
+    let toggleSettled: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: toggle) {
+        HStack(spacing: 12) {
+            Button(action: open) {
                 HStack(spacing: 12) {
-                    Avatar(name: share.person.name, color: color, size: 42)
+                    Avatar(name: share.person.name, color: color, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(share.person.name.isEmpty ? "Unnamed" : share.person.name)
                             .font(.headline)
-                        Text(share.items.count == 1 ? "1 item" : "\(share.items.count) items")
+                        Text(subtitle)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(isSettled ? Color.green : .secondary)
                     }
                     Spacer()
                     Text(Money.format(share.totalCents))
-                        .font(.money(20))
+                        .font(.money(19))
+                        .strikethrough(isSettled)
+                        .foregroundStyle(isSettled ? .secondary : .primary)
                         .contentTransition(.numericText())
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(share.person.name), \(Money.format(share.totalCents))")
 
-            if isExpanded {
-                VStack(spacing: 8) {
-                    ForEach(Array(share.items.enumerated()), id: \.offset) { _, item in
-                        line(item.splitCount > 1 ? "\(item.name) (÷\(item.splitCount))" : item.name, item.cents)
-                    }
-                    Divider()
-                    line("Tax", share.taxCents)
-                    line("Tip", share.tipCents)
-                    Button(action: onEdit) {
-                        Label("Edit what \(share.person.name) had", systemImage: "pencil")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(PillButtonStyle())
-                    .padding(.top, 4)
+            switch status {
+            case .owes, .settled:
+                Button(action: toggleSettled) {
+                    Image(systemName: isSettled ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(isSettled ? Color.green : Color.secondary.opacity(0.5))
                 }
-                .font(.subheadline)
-                .padding(14)
-                .background(Theme.card, in: .rect(cornerRadius: 14))
-                .padding(.top, 10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .buttonStyle(.plain)
+                .accessibilityLabel(isSettled ? "\(share.person.name) paid back" : "Mark \(share.person.name) as paid back")
+            case .paid:
+                Image(systemName: "creditcard.fill")
+                    .font(.title3)
+                    .foregroundStyle(Theme.brand)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+            case .none:
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(12)
         .background(Theme.field, in: .rect(cornerRadius: 18))
+        .opacity(isSettled ? 0.75 : 1)
     }
 
-    private func line(_ label: String, _ cents: Int) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(Money.format(cents)).monospacedDigit().foregroundStyle(.secondary)
+    private var isSettled: Bool {
+        if case .settled = status { return true }
+        return false
+    }
+
+    private var subtitle: String {
+        switch status {
+        case .none: return share.items.count == 1 ? "1 item" : "\(share.items.count) items"
+        case .paid(let waiting): return waiting == 0 ? "Paid the bill · all paid back" : "Paid the bill · gets back \(Money.format(waiting))"
+        case .owes(let payer): return "Owes \(payer)"
+        case .settled(let payer): return "Paid \(payer) back"
         }
+    }
+}
+
+/// An item with everyone's initials underneath — tap initials to say who had it.
+private struct QuickAssignRow: View {
+    let item: BillItem
+    let bill: Bill
+    let edit: () -> Void
+    let toggle: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: edit) {
+                HStack {
+                    Text(item.name.isEmpty ? "Unnamed item" : item.name)
+                        .font(.body.weight(.medium))
+                    Spacer()
+                    Text(Money.format(item.priceCents))
+                        .font(.money(17, weight: .semibold))
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(item.name), \(Money.format(item.priceCents))")
+
+            if !bill.people.isEmpty {
+                let sharers = bill.sharers(of: item)
+                HStack(spacing: 6) {
+                    ForEach(Array(bill.people.enumerated()), id: \.element.id) { index, person in
+                        let had = sharers.contains { $0.id == person.id }
+                        Button {
+                            toggle(person.id)
+                        } label: {
+                            Avatar(name: person.name, color: had ? Theme.color(for: index) : Color.secondary.opacity(0.25), size: 30)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(person.name) had \(item.name)")
+                        .accessibilityAddTraits(had ? .isSelected : [])
+                    }
+                    Spacer()
+                    Text(sharers.count == bill.people.count ? "Everyone" : (sharers.count == 1 ? "1 person" : "Split \(sharers.count) ways"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Theme.brand)
+                }
+            }
+        }
+        .padding(.vertical, 10)
     }
 }
 

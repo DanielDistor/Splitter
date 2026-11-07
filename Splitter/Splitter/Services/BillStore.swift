@@ -28,6 +28,22 @@ final class BillStore {
         bills.sorted { $0.date > $1.date }
     }
 
+    /// Bills whose title or any person's name contains `text`, newest first.
+    func search(_ text: String) -> [Bill] {
+        let query = text.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return sortedBills }
+        return sortedBills.filter { bill in
+            bill.title.localizedCaseInsensitiveContains(query)
+                || bill.people.contains { $0.name.localizedCaseInsensitiveContains(query) }
+        }
+    }
+
+    /// Groups bills by the month they happened in, newest month first.
+    static func byMonth(_ bills: [Bill], calendar: Calendar = .current) -> [(month: Date, bills: [Bill])] {
+        let groups = Dictionary(grouping: bills) { calendar.dateInterval(of: .month, for: $0.date)?.start ?? $0.date }
+        return groups.keys.sorted(by: >).map { (month: $0, bills: groups[$0]!.sorted { $0.date > $1.date }) }
+    }
+
     func addBill() -> Bill {
         let bill = Bill(title: "")
         bills.append(bill)

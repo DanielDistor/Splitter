@@ -4,6 +4,7 @@ struct BillListView: View {
     @Environment(BillStore.self) private var store
     @State private var path: [UUID] = []
     @State private var showWelcome = false
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -15,17 +16,28 @@ struct BillListView: View {
                         emptyState
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Your Bills")
-                                .font(.title3.bold())
-                                .padding(.horizontal, 4)
-                            ForEach(store.sortedBills) { bill in
-                                NavigationLink(value: bill.id) {
-                                    BillCard(bill: bill)
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button("Delete Bill", systemImage: "trash", role: .destructive) {
-                                        withAnimation { store.delete(ids: [bill.id]) }
+                            searchField
+                            let results = store.search(searchText)
+                            if results.isEmpty {
+                                Text("No bills match \"\(searchText)\".")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 30)
+                            }
+                            ForEach(BillStore.byMonth(results), id: \.month) { group in
+                                Text(group.month.formatted(.dateTime.month(.wide).year()))
+                                    .font(.title3.bold())
+                                    .padding(.horizontal, 4)
+                                    .padding(.top, 8)
+                                ForEach(group.bills) { bill in
+                                    NavigationLink(value: bill.id) {
+                                        BillCard(bill: bill)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button("Delete Bill", systemImage: "trash", role: .destructive) {
+                                            withAnimation { store.delete(ids: [bill.id]) }
+                                        }
                                     }
                                 }
                             }
@@ -123,6 +135,27 @@ struct BillListView: View {
         .padding(.horizontal, 20)
     }
 
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search bills or people", text: $searchText)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .card(cornerRadius: 14)
+    }
+
     private var newBillButton: some View {
         Button(action: addBill) {
             Label("New Bill", systemImage: "plus")
@@ -183,9 +216,19 @@ private struct BillCard: View {
                 Text(Money.format(summary.totalCents))
                     .font(.money(19))
                     .foregroundStyle(Theme.brand)
-                Text(bill.items.count == 1 ? "1 item" : "\(bill.items.count) items")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Group {
+                    if bill.isFullySettled {
+                        Label("Settled", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else if bill.paidBy != nil {
+                        Text("Waiting on \(Money.format(bill.outstandingCents))")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text(bill.items.count == 1 ? "1 item" : "\(bill.items.count) items")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption.weight(.medium))
             }
             .fixedSize()
         }

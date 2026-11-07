@@ -41,15 +41,30 @@ final class SplitterUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
         app.launch()
-        app.swipeUp()
-        snapshot(app, "5-totals")
-        app.swipeUp()
+        snapshot(app, "5-bill-top")
         let alice = app.buttons["Alice, $45.36"]
         XCTAssertTrue(alice.waitForExistence(timeout: 2), "Alice owes her food + proportional tax and tip")
-        if !alice.isHittable { app.swipeUp() }
         alice.tap()
         XCTAssertTrue(app.staticTexts["Margherita Pizza (÷2)"].waitForExistence(timeout: 2))
-        snapshot(app, "6-who-owes")
+        snapshot(app, "6-person")
+    }
+
+    func testWhoPaidAndSettlingUp() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
+        app.launch()
+
+        app.buttons["Who paid"].tap()
+        app.buttons["Alice"].firstMatch.tap()
+        XCTAssertTrue(app.anyElement(containing: "Alice paid · waiting on $92.00").waitForExistence(timeout: 2))
+
+        app.buttons["Mark Bob as paid back"].tap()
+        XCTAssertTrue(app.anyElement(containing: "waiting on $62.20").waitForExistence(timeout: 2))
+        snapshot(app, "12-settle")
+
+        app.buttons["Cara, $62.20"].tap()
+        XCTAssertTrue(app.buttons["Request on Venmo"].waitForExistence(timeout: 2))
+        snapshot(app, "13-request")
     }
 
     /// The simulator has no camera, so `-scanDemoReceipt` feeds the scanner a rendered sample receipt.
@@ -77,11 +92,9 @@ final class SplitterUITests: XCTestCase {
         app.launchArguments = ["-demo", "-skipWelcome", "-openBill"]
         app.launch()
 
-        let addPerson = app.buttons["Add Person"]
-        for _ in 0..<4 where !addPerson.isHittable { app.swipeUp() }
+        let addPerson = app.textFields["Add a person"]
         addPerson.tap()
-        app.alerts.textFields["Name"].typeText("Dana")
-        app.alerts.buttons["Add"].tap()
+        addPerson.typeText("Dana\n")
 
         // Dana automatically shares the wine (marked Everyone): $42 / 4 = $10.50 plus tax and tip.
         let dana = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Dana, $'")).firstMatch
@@ -89,15 +102,8 @@ final class SplitterUITests: XCTestCase {
         XCTAssertEqual(dana.label, "Dana, $13.61")
         snapshot(app, "9-four-people")
 
-        // Give Dana a slice of the pizza too.
-        dana.tap()
-        let edit = app.buttons["Edit what Dana had"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 2))
-        for _ in 0..<3 where !edit.isHittable || edit.frame.maxY > app.frame.maxY - 60 { app.swipeUp() }
-        edit.tap()
-        app.buttons["Margherita Pizza"].tap()
-        snapshot(app, "10-person-editor")
-        app.buttons["Done"].tap()
+        // Give Dana a slice of the pizza too, right on the item row.
+        app.buttons["Dana had Margherita Pizza"].tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Dana, $21.38'")).firstMatch.waitForExistence(timeout: 3))
     }
 
